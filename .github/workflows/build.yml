@@ -12,18 +12,15 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel superseded PR runs, so every commit on main gets a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        # macos-15: the oldest macOS and Swift the README promises.
-        # macos-latest: catches breaks from newer Swift and SDKs.
-        os: [macos-15, macos-latest]
-    runs-on: ${{ matrix.os }}
+    name: Build (macOS 27)
+    # GitHub names macOS images after their Xcode: xcode-27 runs macOS 27 with
+    # Xcode 27, the minimum Whirr supports.
+    runs-on: xcode-27
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5

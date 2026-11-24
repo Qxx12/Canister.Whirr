@@ -9,7 +9,7 @@ no menu bar icon, Dock icon or window.
 
 ## Install from source
 
-Requires macOS 15 or later and Swift 6 (Xcode or the Command Line Tools).
+Requires macOS 27 or later and Swift 6.4 or later (Xcode 27 or its Command Line Tools).
 
 ```bash
 swift build -c release
