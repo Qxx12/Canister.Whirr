@@ -214,7 +214,12 @@ case "monitor":
     Daemon(verbose: true, silent: true).run()
 case "run":
     refuseRoot()
-    guard InstanceLock.acquire() else {
+    // The login agent waits for a foreground `whirr run` to finish instead
+    // of exiting: a clean exit would never be restarted by launchd
+    // (KeepAlive only restarts after a failure). A manual run just leaves.
+    if InstanceLock.isLoginAgent {
+        _ = InstanceLock.acquire(wait: true)
+    } else if !InstanceLock.acquire(wait: false) {
         print("Another Whirr is already running.")
         exit(0)
     }

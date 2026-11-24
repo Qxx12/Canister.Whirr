@@ -171,11 +171,17 @@ final class Daemon {
 enum InstanceLock {
     private static var descriptor: Int32 = -1
 
-    /// Returns false if another Whirr process holds the lock.
-    static func acquire() -> Bool {
+    /// Takes the lock. With `wait`, blocks until another Whirr process
+    /// releases it; otherwise returns false at once if it's held.
+    static func acquire(wait: Bool) -> Bool {
         try? FileManager.default.createDirectory(at: Paths.support, withIntermediateDirectories: true)
         descriptor = open(Paths.lock.path, O_CREAT | O_RDWR, 0o644)
         guard descriptor >= 0 else { return true }
-        return flock(descriptor, LOCK_EX | LOCK_NB) == 0
+        return flock(descriptor, wait ? LOCK_EX : LOCK_EX | LOCK_NB) == 0
+    }
+
+    /// True when launchd started this process as Whirr's login agent.
+    static var isLoginAgent: Bool {
+        ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == Whirr.label
     }
 }
