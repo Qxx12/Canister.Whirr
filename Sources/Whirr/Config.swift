@@ -26,6 +26,26 @@ struct Config: Codable, Equatable {
     var volume: Double = 0.2
     var muted: Bool = false
     var sensitivity: Double = 1.0
+    /// Hum on the Force Touch trackpad along with the seeks.
+    var haptics: Bool = false
+    /// How strong the trackpad hum is, 0.75-1.5. The floor is where the
+    /// quietest seeks still hum at about 0.12, near the least the trackpad's
+    /// sine can be felt at; lower settings would seem broken, not fainter.
+    var hapticStrength: Double = 0.85
+
+    init() {}
+
+    /// Missing keys keep their defaults, so a config file written by an
+    /// older Whirr still loads with its settings.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = Config()
+        volume = try container.decodeIfPresent(Double.self, forKey: .volume) ?? defaults.volume
+        muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? defaults.muted
+        sensitivity = try container.decodeIfPresent(Double.self, forKey: .sensitivity) ?? defaults.sensitivity
+        haptics = try container.decodeIfPresent(Bool.self, forKey: .haptics) ?? defaults.haptics
+        hapticStrength = try container.decodeIfPresent(Double.self, forKey: .hapticStrength) ?? defaults.hapticStrength
+    }
 
     static func load() -> Config {
         guard let data = try? Data(contentsOf: Paths.config),
@@ -33,7 +53,13 @@ struct Config: Codable, Equatable {
         else { return Config() }
         config.volume = min(max(config.volume, 0), 1)
         config.sensitivity = min(max(config.sensitivity, 0.25), 4)
+        config.hapticStrength = min(max(config.hapticStrength, 0.75), 1.5)
         return config
+    }
+
+    /// "on, strength 85%" or "off", for the CLI.
+    var hapticsSummary: String {
+        haptics ? "on, strength \(Int((hapticStrength * 100).rounded()))%" : "off"
     }
 
     func save() throws {

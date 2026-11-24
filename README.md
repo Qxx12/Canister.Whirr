@@ -48,6 +48,7 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr mute` / `unmute` / `toggle` | Silence or resume (polling stops while muted, 0% CPU) |
 | `whirr volume [0-100]` | Show or set the volume |
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
+| `whirr haptics [on\|off\|75-150]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
 | `whirr demo` | Play sample sounds and exit |
 | `whirr monitor` | Print live disk activity levels, no sound |
 
@@ -86,6 +87,19 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   256-frame buffer. The engine pauses after 3 seconds of silence, which lets the Mac
   sleep and costs nothing while quiet; restarting takes under 10 ms. The default volume
   is 20%, meant to sit in the background.
+
+- **Haptics (optional):** with `whirr haptics on`, the Force Touch trackpad (a MacBook's
+  built-in one or a Magic Trackpad) hums along with the seeks, felt while a finger rests
+  on it. Each seek starts a 35 ms burst of a 60 Hz vibration, timed by the output's
+  reported latency to land with the sound. A busy disk runs the bursts together into a
+  continuous hum, a lone seek is one soft thrum, and longer seeks hum a little stronger.
+  60 Hz is low enough to feel without hearing it; the trackpad's built-in taps feel like
+  clicks instead. `whirr haptics 80` or `120` makes it fainter or stronger. Whirr drives
+  the trackpad through Apple's private MultitouchSupport framework, since the public
+  haptics API is only for a foreground app's own controls. Its calls were worked out on
+  macOS 27, so haptics stay off on other versions until they're checked (`whirr status`
+  says so) rather than risk a crash; `WHIRR_HAPTICS_UNVERIFIED=1 whirr demo` tries them
+  anyway.
 
 On built-in speakers or wired headphones a click follows disk activity by a few tens of
 milliseconds. Bluetooth headphones such as AirPods add roughly 150–250 ms that no app can

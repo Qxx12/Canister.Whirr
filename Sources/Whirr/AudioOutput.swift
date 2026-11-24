@@ -46,6 +46,13 @@ final class AudioOutput {
 
     var isRunning: Bool { engine?.isRunning ?? false }
 
+    /// Seconds from a sound's scheduled time to when it's heard, as the
+    /// output device reports it (a few ms on built-in speakers, far more on
+    /// Bluetooth). Used to line haptics up with what the user hears.
+    var outputLatency: TimeInterval {
+        min(max(engine?.outputNode.presentationLatency ?? 0, 0), 0.5)
+    }
+
     init(queue: DispatchQueue, format: AVAudioFormat, voices: Int = 32, idleTimeout: TimeInterval = 3,
          log: @escaping (String) -> Void) {
         self.queue = queue
