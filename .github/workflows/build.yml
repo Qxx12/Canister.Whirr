@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Only cancel superseded PR runs, so every commit on main gets a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build (macOS 27)
+    # GitHub names macOS images after their Xcode: xcode-27 runs macOS 27 with
+    # Xcode 27, the minimum Whirr supports.
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Build release
+        run: swift build -c release
+
+      - name: Smoke test
+        run: '"$(swift build -c release --show-bin-path)/whirr" version'
