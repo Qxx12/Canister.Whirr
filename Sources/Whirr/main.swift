@@ -15,7 +15,7 @@ Usage: whirr <command>
   volume [0-100]     Show or set the volume (default \(Int((Config().volume * 100).rounded())))
   sensitivity [x]    Show or set how eagerly activity makes sound (0.25-4, default 1)
   haptics [on|off|n] Show or set a trackpad hum that follows the seeks;
-                     n sets its strength (50-100%, default 75) and turns it on
+                     n sets its strength (50-100%, default 85) and turns it on
 
   demo               Play a few sample sounds and exit
   monitor            Print live disk activity levels without playing sound

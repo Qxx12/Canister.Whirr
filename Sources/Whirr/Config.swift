@@ -37,7 +37,7 @@ struct Config: Codable, Equatable {
     /// How strong the trackpad hum is, 0.5-1.0. At the floor only the
     /// louder seeks reach the least the trackpad's sine can be felt at
     /// (about 0.12), so low settings feel sparser as well as fainter.
-    var hapticStrength: Double = 0.75
+    var hapticStrength: Double = 0.85
 
     init() {}
 
@@ -69,7 +69,7 @@ struct Config: Codable, Equatable {
         return config
     }
 
-    /// "on, strength 75%" or "off", for the CLI.
+    /// "on, strength 85%" or "off", for the CLI.
     var hapticsSummary: String {
         haptics ? "on, strength \(Int((hapticStrength * 100).rounded()))%" : "off"
     }
