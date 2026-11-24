@@ -14,6 +14,8 @@ Usage: whirr <command>
   toggle             Switch between muted and unmuted
   volume [0-100]     Show or set the volume
   sensitivity [x]    Show or set how eagerly activity makes sound (0.25-4, default 1)
+  haptics [on|off|n] Show or set a trackpad hum that follows the seeks;
+                     n sets its strength (50-150%, default 85) and turns it on
 
   demo               Play a few sample sounds and exit
   monitor            Print live disk activity levels without playing sound
@@ -139,6 +141,7 @@ func report() {
     }
     print("Volume \(Int((config.volume * 100).rounded()))%, sensitivity \(config.sensitivity)\(config.muted ? ", muted" : "")")
     print("Output: \(AudioOutput.describeDefaultOutput())")
+    print("Haptics: \(config.hapticsSummary) (\(Haptics.describeTrackpads()))")
 }
 
 func demo() {
@@ -147,7 +150,13 @@ func demo() {
     let config = Config.load()
     let audio = AudioOutput(queue: queue, format: bank.format) { _ in }
     audio.volume = Float(config.volume)
+    let haptics = Haptics(queue: queue) { _ in }
+    haptics.enabled = config.haptics
+    haptics.strength = config.hapticStrength
     print("Playing on \(AudioOutput.describeDefaultOutput())…")
+    if config.haptics {
+        print("Haptics on: rest a finger on the trackpad (\(Haptics.describeTrackpads())).")
+    }
 
     // Single seeks from track-to-track to full stroke, then a burst of busy I/O.
     var schedule: [(TimeInterval, Double, Float)] = []
@@ -167,14 +176,29 @@ func demo() {
         }
         time += Daemon.pollInterval
     }
-    let start = DispatchTime.now()
-    for (offset, distance, gain) in schedule {
-        queue.asyncAfter(deadline: start + offset) { audio.play(bank.buffer(distance: distance), gain: gain) }
+    // Play from one strict timer: separate asyncAfter calls seconds ahead may
+    // be coalesced by the system and fire in clumps, which bunched the busy
+    // burst into a few chords.
+    schedule.sort { $0.0 < $1.0 }
+    let start = mach_absolute_time()
+    let end = time + 0.5
+    var next = 0
+    let timer = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
+    timer.schedule(deadline: .now(), repeating: .milliseconds(2), leeway: .milliseconds(1))
+    timer.setEventHandler {
+        let elapsed = Double(mach_absolute_time() - start) / Double(AudioOutput.hostTicks(1))
+        while next < schedule.count, schedule[next].0 <= elapsed {
+            let (_, distance, gain) = schedule[next]
+            audio.play(bank.buffer(distance: distance), gain: gain)
+            haptics.play(gain: gain, delay: audio.outputLatency)
+            next += 1
+        }
+        if elapsed >= end {
+            audio.stop()
+            exit(0)
+        }
     }
-    queue.asyncAfter(deadline: start + time + 0.5) {
-        audio.stop()
-        exit(0)
-    }
+    timer.resume()
     dispatchMain()
 }
 
@@ -221,6 +245,28 @@ case "sensitivity":
         guard (0.25...4).contains(value) else { return false }
         config.sensitivity = value
         return true
+    }
+case "haptics":
+    let trackpads = Haptics.describeTrackpads()
+    switch arguments.dropFirst().first {
+    case nil:
+        print("Haptics: \(Config.load().hapticsSummary) (\(trackpads))")
+    case "on":
+        let config = updateConfig { $0.haptics = true }
+        print("Haptics: \(config.hapticsSummary) (\(trackpads)). Felt while a finger rests on the trackpad.")
+    case "off":
+        _ = updateConfig { $0.haptics = false }
+        print("Haptics: off")
+    case let raw?:
+        guard let percent = Double(raw.trimmingCharacters(in: CharacterSet(charactersIn: "%"))) else {
+            fail("haptics takes `on`, `off` or a strength from 50 to 150")
+        }
+        guard (50...150).contains(percent) else { fail("haptic strength must be 50-150") }
+        let config = updateConfig {
+            $0.haptics = true
+            $0.hapticStrength = percent / 100
+        }
+        print("Haptics: \(config.hapticsSummary) (\(trackpads))")
     }
 case "demo": demo()
 case "monitor":

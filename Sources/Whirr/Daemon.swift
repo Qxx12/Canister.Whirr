@@ -17,6 +17,7 @@ final class Daemon {
     private var sonifier = Sonifier()
     private var bank: SoundBank!
     private var audio: AudioOutput!
+    private var haptics: Haptics!
     private var config = Config()
     private var pollTimer: DispatchSourceTimer?
     private var lastTick: UInt64 = 0
@@ -46,6 +47,7 @@ final class Daemon {
         log("whirr \(Whirr.version) starting (pid \(getpid()))")
         bank = SoundBank()
         audio = AudioOutput(queue: queue, format: bank.format) { [weak self] in self?.log($0) }
+        haptics = Haptics(queue: queue) { [weak self] in self?.log($0) }
         monitor = DiskMonitor(queue: queue)
         monitor.onDrivesChanged = { [weak self] added, removed in
             if let added { self?.log("disk: watching \(added)") }
@@ -62,15 +64,19 @@ final class Daemon {
     private func applyConfig() {
         let new = Config.load()
         if new != config || pollTimer == nil {
-            log("config: volume \(Int(new.volume * 100))%, sensitivity \(new.sensitivity)\(new.muted ? ", muted" : "")")
+            log("config: volume \(Int(new.volume * 100))%, sensitivity \(new.sensitivity)"
+                + "\(new.haptics ? ", haptics \(Int((new.hapticStrength * 100).rounded()))%" : "")\(new.muted ? ", muted" : "")")
         }
         config = new
         audio.volume = Float(config.volume)
+        haptics.enabled = config.haptics && !silent
+        haptics.strength = config.hapticStrength
         sonifier.sensitivity = config.sensitivity
         // `whirr monitor` (silent) keeps watching even when sound is muted.
         if config.muted && !silent {
             stopPolling()
             audio.stop()
+            haptics.stop()
         } else {
             startPolling()
         }
@@ -117,6 +123,7 @@ final class Daemon {
         if !silent {
             for event in events {
                 audio.play(bank.buffer(distance: event.distance), gain: event.gain, delay: event.delay)
+                haptics.play(gain: event.gain, delay: event.delay + audio.outputLatency)
             }
         }
         if verbose { report(dt: dt, clicks: events.count) }
