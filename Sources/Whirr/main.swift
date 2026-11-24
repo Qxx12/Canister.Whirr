@@ -15,7 +15,7 @@ Usage: whirr <command>
   volume [0-100]     Show or set the volume
   sensitivity [x]    Show or set how eagerly activity makes sound (0.25-4, default 1)
   haptics [on|off|n] Show or set a trackpad hum that follows the seeks;
-                     n sets its strength (50-150%, default 85) and turns it on
+                     n sets its strength (75-150%, default 85) and turns it on
 
   demo               Play a few sample sounds and exit
   monitor            Print live disk activity levels without playing sound
@@ -259,9 +259,9 @@ case "haptics":
         print("Haptics: off")
     case let raw?:
         guard let percent = Double(raw.trimmingCharacters(in: CharacterSet(charactersIn: "%"))) else {
-            fail("haptics takes `on`, `off` or a strength from 50 to 150")
+            fail("haptics takes `on`, `off` or a strength from 75 to 150")
         }
-        guard (50...150).contains(percent) else { fail("haptic strength must be 50-150") }
+        guard (75...150).contains(percent) else { fail("haptic strength must be 75-150 (below 75 it can't be felt)") }
         let config = updateConfig {
             $0.haptics = true
             $0.hapticStrength = percent / 100

@@ -48,7 +48,7 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr mute` / `unmute` / `toggle` | Silence or resume (polling stops while muted, 0% CPU) |
 | `whirr volume [0-100]` | Show or set the volume |
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
-| `whirr haptics [on\|off\|50-150]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
+| `whirr haptics [on\|off\|75-150]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
 | `whirr demo` | Play sample sounds and exit |
 | `whirr monitor` | Print live disk activity levels, no sound |
 

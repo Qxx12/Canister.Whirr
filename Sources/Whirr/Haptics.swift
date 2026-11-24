@@ -31,7 +31,11 @@ import IOKit
 ///
 /// Every trackpad that supports actuation is used (a MacBook's built-in one
 /// and a Magic Trackpad), so the hum lands under whichever one the user is
-/// touching. You only feel it while a finger rests on the trackpad.
+/// touching. You only feel it while a finger rests on the trackpad. While
+/// bursts are playing, the IORegistry is checked every `rescanInterval` for
+/// trackpads that connected or went away. Each trackpad is handled on its
+/// own: one that keeps refusing is set aside (and retried later, quietly)
+/// without taking the others down with it.
 ///
 /// All methods must be called on the queue passed to `init`.
 final class Haptics {
@@ -51,25 +55,31 @@ final class Haptics {
     /// Closest two bursts may start: one burst length, so back-to-back
     /// bursts join up without overlapping (the trackpad refuses overlaps).
     private var minimumGap: TimeInterval { burstMS / 1000 }
-    /// How often to look for trackpads again when none is open (e.g. a Magic
-    /// Trackpad connecting later). After a trackpad stops responding, the
-    /// wait doubles each time it fails again, up to `maxRetryInterval`.
+    /// How often to check for trackpads that connected or went away, while
+    /// bursts are playing.
     private let rescanInterval: TimeInterval = 10
-    private let maxRetryInterval: TimeInterval = 600
+    /// A trackpad that keeps refusing is set aside for `rescanInterval`, then
+    /// twice as long each time it fails again, up to this.
+    private let maxBenchInterval: TimeInterval = 600
 
-    private var actuators: [CFTypeRef] = []
+    /// An open trackpad.
+    private struct Pad {
+        let id: UInt64
+        let name: String
+        let actuator: CFTypeRef
+        /// Refused actuations in a row; a busy trackpad can refuse one now and then.
+        var failures = 0
+    }
+    private var pads: [Pad] = []
+    /// Trackpads set aside after refusing repeatedly: when to try again and
+    /// how long the last wait was. While a trackpad is here its trouble has
+    /// been logged; leaving it (by working again) logs the recovery. Logged
+    /// once each, so the agent's log can't grow without bound.
+    private var benched: [UInt64: (until: UInt64, wait: TimeInterval)] = [:]
+    /// Trackpads whose "using" line has been logged, so reopening is quiet.
+    private var announced: Set<UInt64> = []
     /// Bursts built so far, by amplitude in hundredths.
     private var bursts: [Int: CFTypeRef] = [:]
-    /// Failed actuations in a row; a busy trackpad can refuse one now and then.
-    private var failures = 0
-    /// Wait before looking for trackpads again; grows while they keep failing.
-    private var retryInterval: TimeInterval = 10
-    /// Set while trackpads are failing, so the trouble is logged once and the
-    /// recovery once, not on every retry (the agent's log must not grow
-    /// without bound).
-    private var troubled = false
-    /// Trackpads last named in the log, so reopening the same ones is quiet.
-    private var loggedNames: [String] = []
     /// The driver refused the hum definition; it won't accept it later in
     /// this run either, so stop trying.
     private var rejected = false
@@ -185,39 +195,34 @@ final class Haptics {
             }
             return
         }
-        openIfNeeded(library, now: now)
-        guard !actuators.isEmpty, let actuation = hum(library, amplitude: amplitude) else { return }
+        rescanIfDue(library, now: now)
+        guard !pads.isEmpty, let actuation = hum(library, amplitude: amplitude) else { return }
         lastBurst = now
 
-        var failed = false
-        for actuator in actuators {
+        for index in pads.indices {
             // Flags 0: no Light/Medium/Firm preset, so the burst plays as
             // defined, unscaled.
-            if library.actuate(actuation, actuator, 0, 1, 1) != 0 { failed = true }
-        }
-        guard failed else {
-            failures = 0
-            if troubled {
-                log("haptics: trackpad responding again")
-                troubled = false
-                retryInterval = rescanInterval
-            }
-            return
-        }
-        failures += 1
-        if failures >= 3 {
-            // The trackpad went away (Magic Trackpad disconnected) or the
-            // handle went stale over sleep: look again later. If reopening
-            // doesn't help, wait longer each time and stay quiet.
-            if troubled {
-                retryInterval = min(retryInterval * 2, maxRetryInterval)
+            if library.actuate(actuation, pads[index].actuator, 0, 1, 1) == 0 {
+                pads[index].failures = 0
+                if benched.removeValue(forKey: pads[index].id) != nil {
+                    log("haptics: \(pads[index].name) responding again")
+                }
             } else {
-                log("haptics: trackpad stopped responding; will keep trying quietly")
-                troubled = true
+                pads[index].failures += 1
             }
-            failures = 0
-            closeAll()
         }
+        // A trackpad that refused three in a row went away (Magic Trackpad
+        // disconnected), went stale over sleep, or is refusing for now: set
+        // it aside and try it again later, waiting longer each time.
+        for pad in pads where pad.failures >= 3 {
+            _ = library.close(pad.actuator)
+            let wait = benched[pad.id].map { min($0.wait * 2, maxBenchInterval) } ?? rescanInterval
+            if benched[pad.id] == nil {
+                log("haptics: \(pad.name) stopped responding; will keep trying quietly")
+            }
+            benched[pad.id] = (now + AudioOutput.hostTicks(wait), wait)
+        }
+        pads.removeAll { $0.failures >= 3 }
     }
 
     /// A burst of hum at `amplitude`, built once per hundredth and reused.
@@ -243,33 +248,44 @@ final class Haptics {
         return actuation
     }
 
-    private func openIfNeeded(_ library: Library, now: UInt64) {
-        guard actuators.isEmpty else { return }
-        guard !scanned || now - lastScan >= AudioOutput.hostTicks(retryInterval) else { return }
-        let wasScanned = scanned
+    /// Opens trackpads that appeared (or whose time out is over) and closes
+    /// ones that went away. Runs at most every `rescanInterval`.
+    private func rescanIfDue(_ library: Library, now: UInt64) {
+        guard !scanned || now - lastScan >= AudioOutput.hostTicks(rescanInterval) else { return }
+        let first = !scanned
         scanned = true
         lastScan = now
 
-        var names: [String] = []
-        for device in Self.actuationDevices() {
-            guard let actuator = library.create(device.id)?.takeRetainedValue() else { continue }
-            guard library.open(actuator) == 0 else { continue }
-            actuators.append(actuator)
-            names.append(device.name)
+        let devices = Self.actuationDevices()
+        let present = Set(devices.map(\.id))
+        for pad in pads where !present.contains(pad.id) { _ = library.close(pad.actuator) }
+        pads.removeAll { !present.contains($0.id) }
+        // Forget trackpads that are gone, so reconnecting one is announced
+        // and starts with a clean slate.
+        announced.formIntersection(present)
+        benched = benched.filter { present.contains($0.key) }
+
+        for device in devices where !pads.contains(where: { $0.id == device.id }) {
+            if let bench = benched[device.id], now < bench.until { continue }
+            guard let actuator = library.create(device.id)?.takeRetainedValue(),
+                  library.open(actuator) == 0
+            else { continue }
+            pads.append(Pad(id: device.id, name: device.name, actuator: actuator))
+            if !announced.contains(device.id) && benched[device.id] == nil {
+                log("haptics: using \(device.name)")
+                announced.insert(device.id)
+            }
         }
-        if !names.isEmpty, names != loggedNames {
-            log("haptics: using \(names.joined(separator: ", "))")
-            loggedNames = names
-        } else if names.isEmpty, !wasScanned {
+        if first && devices.isEmpty {
             log("haptics: no Force Touch trackpad found")
         }
     }
 
     private func closeAll() {
         if let library = Library.shared {
-            for actuator in actuators { _ = library.close(actuator) }
+            for pad in pads { _ = library.close(pad.actuator) }
         }
-        actuators = []
+        pads = []
     }
 
     // MARK: - Devices
