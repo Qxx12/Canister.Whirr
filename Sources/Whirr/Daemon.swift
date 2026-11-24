@@ -172,12 +172,33 @@ enum InstanceLock {
     private static var descriptor: Int32 = -1
 
     /// Takes the lock. With `wait`, blocks until another Whirr process
-    /// releases it; otherwise returns false at once if it's held.
+    /// releases it; otherwise returns false at once if it's held. The holder
+    /// writes its PID into the lock file so others can say who's playing.
     static func acquire(wait: Bool) -> Bool {
         try? FileManager.default.createDirectory(at: Paths.support, withIntermediateDirectories: true)
         descriptor = open(Paths.lock.path, O_CREAT | O_RDWR, 0o644)
         guard descriptor >= 0 else { return true }
-        return flock(descriptor, wait ? LOCK_EX : LOCK_EX | LOCK_NB) == 0
+        guard flock(descriptor, wait ? LOCK_EX : LOCK_EX | LOCK_NB) == 0 else { return false }
+        let pid = Data("\(getpid())\n".utf8)
+        ftruncate(descriptor, 0)
+        _ = pid.withUnsafeBytes { pwrite(descriptor, $0.baseAddress, pid.count, 0) }
+        return true
+    }
+
+    /// The PID of the Whirr process playing now, if one is alive.
+    static var holder: pid_t? {
+        guard let text = try? String(contentsOf: Paths.lock, encoding: .utf8),
+              let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              pid > 0, kill(pid, 0) == 0 || errno == EPERM
+        else { return nil }
+        return pid
+    }
+
+    /// Writes a timestamped line to stderr (the agent's log), like Daemon.log.
+    static func log(_ message: String) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        FileHandle.standardError.write(Data("\(formatter.string(from: Date())) \(message)\n".utf8))
     }
 
     /// True when launchd started this process as Whirr's login agent.

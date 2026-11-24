@@ -108,7 +108,14 @@ func report() {
     let config = Config.load()
     switch LaunchAgent.state {
     case .loaded(let pid?):
-        print("Whirr is running (pid \(pid)).")
+        if let holder = InstanceLock.holder, holder != pid_t(pid) {
+            print("""
+            Whirr's login agent (pid \(pid)) is waiting: another copy (pid \(holder)) is playing,
+            probably a `whirr run` in a terminal. The agent takes over when it exits.
+            """)
+        } else {
+            print("Whirr is running (pid \(pid)).")
+        }
     case .loaded(nil):
         print("Whirr is installed but not running. See \(Paths.log.path).")
     case .installedNotLoaded:
@@ -218,9 +225,15 @@ case "run":
     // of exiting: a clean exit would never be restarted by launchd
     // (KeepAlive only restarts after a failure). A manual run just leaves.
     if InstanceLock.isLoginAgent {
-        _ = InstanceLock.acquire(wait: true)
+        if !InstanceLock.acquire(wait: false) {
+            let who = InstanceLock.holder.map { " (pid \($0))" } ?? ""
+            InstanceLock.log("waiting for another Whirr\(who) to exit, probably a `whirr run` in a terminal")
+            _ = InstanceLock.acquire(wait: true)
+            InstanceLock.log("the other Whirr exited; taking over")
+        }
     } else if !InstanceLock.acquire(wait: false) {
-        print("Another Whirr is already running.")
+        let who = InstanceLock.holder.map { " (pid \($0))" } ?? ""
+        print("Another Whirr is already running\(who).")
         exit(0)
     }
     Daemon(verbose: arguments.contains("--verbose"), silent: false).run()
