@@ -46,7 +46,7 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr restart` | Restart the running agent |
 | `whirr status` | Running state, settings and output device |
 | `whirr mute` / `unmute` / `toggle` | Silence or resume (polling stops while muted, 0% CPU) |
-| `whirr volume [0-100]` | Show or set the volume |
+| `whirr volume [0-100]` | Show or set the volume (default 25) |
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
 | `whirr haptics [on\|off\|75-150]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
 | `whirr demo` | Play sample sounds and exit |
@@ -85,8 +85,10 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   `reports/Realistic HDD sound synthesis.md`.
 - **Playback:** an AVAudioEngine with a pool of 32 voices plays the gestures with a
   256-frame buffer. The engine pauses after 3 seconds of silence, which lets the Mac
-  sleep and costs nothing while quiet; restarting takes under 10 ms. The default volume
-  is 20%, meant to sit in the background.
+  sleep and costs nothing while quiet; restarting takes under 10 ms. Volume 100% is capped
+  at a fifth of full digital level, since a real drive is much quieter than that; the
+  default is 25%, meant to sit in the background. Settings saved before this cap are
+  converted on load so they sound the same.
 
 - **Haptics (optional):** with `whirr haptics on`, the Force Touch trackpad (a MacBook's
   built-in one or a Magic Trackpad) hums along with the seeks, felt while a finger rests
@@ -101,9 +103,10 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   says so) rather than risk a crash; `WHIRR_HAPTICS_UNVERIFIED=1 whirr demo` tries them
   anyway.
 
-On built-in speakers or wired headphones a click follows disk activity by a few tens of
-milliseconds. Bluetooth headphones such as AirPods add roughly 150–250 ms that no app can
-remove.
+Whirr plays only through the Mac's built-in speaker, where a click follows disk activity
+by a few tens of milliseconds. When the system output is anything else (AirPods,
+headphones, a display), Whirr stays silent and picks up again once the speaker is
+selected. Haptics carry on either way.
 
 ## Troubleshooting
 

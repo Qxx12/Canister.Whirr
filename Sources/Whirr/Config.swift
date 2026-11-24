@@ -23,7 +23,13 @@ enum Paths {
 /// small JSON file. The CLI writes it and posts a Darwin notification; the
 /// agent reloads on that notification.
 struct Config: Codable, Equatable {
-    var volume: Double = 0.2
+    /// 0-1, where 1 plays at `AudioOutput.fullScaleGain`.
+    var volume: Double = 0.25
+    /// Which scale `volume` is on. Files written before the volume range was
+    /// capped have no such key; their volume was the raw mixer gain and is
+    /// converted on load so it sounds the same.
+    var volumeScale: Int = Config.currentVolumeScale
+    static let currentVolumeScale = 2
     var muted: Bool = false
     var sensitivity: Double = 1.0
     /// Hum on the Force Touch trackpad along with the seeks.
@@ -40,7 +46,13 @@ struct Config: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = Config()
-        volume = try container.decodeIfPresent(Double.self, forKey: .volume) ?? defaults.volume
+        let scale = try container.decodeIfPresent(Int.self, forKey: .volumeScale) ?? 1
+        if let saved = try container.decodeIfPresent(Double.self, forKey: .volume) {
+            volume = scale >= Config.currentVolumeScale ? saved : saved / AudioOutput.fullScaleGain
+        } else {
+            volume = defaults.volume
+        }
+        volumeScale = Config.currentVolumeScale
         muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? defaults.muted
         sensitivity = try container.decodeIfPresent(Double.self, forKey: .sensitivity) ?? defaults.sensitivity
         haptics = try container.decodeIfPresent(Bool.self, forKey: .haptics) ?? defaults.haptics

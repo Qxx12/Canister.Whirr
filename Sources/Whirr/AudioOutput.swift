@@ -15,6 +15,9 @@ import Foundation
 /// When the output device changes (AirPods connect, headphones plugged in)
 /// the engine is rebuilt the next time a sound plays.
 ///
+/// Whirr plays only while the built-in speaker is the default output. On any
+/// other output it stays silent and keeps no engine open on that device.
+///
 /// All methods must be called on the queue passed to `init`.
 final class AudioOutput {
     private let queue: DispatchQueue
@@ -27,6 +30,8 @@ final class AudioOutput {
     private var players: [AVAudioPlayerNode] = []
     private var nextVoice = 0
     private var needsRebuild = true
+    /// Whether the default output is the built-in speaker (see the type's doc).
+    private var speakerSelected = AudioOutput.defaultOutputIsBuiltInSpeaker()
     private var startedAt: UInt64 = 0
     private var builtAt: UInt64 = 0
     /// Bumped by `stop()`, so sounds deferred before a mute don't play after it.
@@ -40,8 +45,14 @@ final class AudioOutput {
     /// add delay.
     private let bufferFrames: UInt32 = 256
 
-    var volume: Float = 0.2 {
-        didSet { engine?.mainMixerNode.outputVolume = volume }
+    /// Mixer gain at volume 100%. Full digital level is far louder than a real
+    /// drive (about 2% of it sounds realistic), so the user's 0-100% range is
+    /// scaled down to this cap, leaving the useful levels room to adjust.
+    static let fullScaleGain = 0.2
+
+    /// The user's volume, 0-1 (see `fullScaleGain`).
+    var volume: Float = 0.25 {
+        didSet { engine?.mainMixerNode.outputVolume = volume * Float(Self.fullScaleGain) }
     }
 
     var isRunning: Bool { engine?.isRunning ?? false }
@@ -73,7 +84,7 @@ final class AudioOutput {
 
     /// Plays `buffer` on the next voice, `delay` seconds from now.
     func play(_ buffer: AVAudioPCMBuffer, gain: Float, delay: TimeInterval = 0) {
-        guard ensureRunning() else { return }
+        guard speakerSelected, ensureRunning() else { return }
         armIdleTimer()
 
         var when: AVAudioTime?
@@ -145,7 +156,7 @@ final class AudioOutput {
             engine.attach(player)
             engine.connect(player, to: engine.mainMixerNode, format: format)
         }
-        engine.mainMixerNode.outputVolume = volume
+        engine.mainMixerNode.outputVolume = volume * Float(Self.fullScaleGain)
         engine.prepare()
 
         configObserver = NotificationCenter.default.addObserver(
@@ -231,33 +242,66 @@ final class AudioOutput {
             guard let self else { return }
             self.log("audio: default output changed to \(Self.describeDefaultOutput())")
             self.needsRebuild = true
-            // Rebuild now if sound is playing, so the next click isn't lost.
-            if self.isRunning { _ = self.ensureRunning() }
+            self.speakerSelected = Self.defaultOutputIsBuiltInSpeaker()
+            if self.speakerSelected {
+                // Rebuild now if sound is playing, so the next click isn't lost.
+                if self.isRunning { _ = self.ensureRunning() }
+            } else {
+                // Let go of the engine at once, and drop deferred sounds.
+                self.generation += 1
+                self.idleTimer?.cancel()
+                self.idleTimer = nil
+                self.teardown()
+            }
         }
         var address = Self.defaultOutputAddress
         let status = AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, block)
         if status == noErr { deviceListener = block }
     }
 
-    static func describeDefaultOutput() -> String {
+    private static func defaultOutputDevice() -> AudioDeviceID? {
         var device = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = defaultOutputAddress
         guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device) == noErr
-        else { return "unknown output" }
+        else { return nil }
+        return device
+    }
 
+    private static func uint32Property(_ device: AudioDeviceID, _ selector: AudioObjectPropertySelector,
+                                       scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> UInt32? {
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr else { return nil }
+        return value
+    }
+
+    /// True when the default output is the Mac's own speaker: a built-in
+    /// device whose output data source, where it reports one, is the speaker
+    /// ('ispk') rather than the headphone jack.
+    static func defaultOutputIsBuiltInSpeaker() -> Bool {
+        guard let device = defaultOutputDevice(),
+              uint32Property(device, kAudioDevicePropertyTransportType) == kAudioDeviceTransportTypeBuiltIn
+        else { return false }
+        let speakerSource: UInt32 = 0x6973_706B  // 'ispk'
+        guard let source = uint32Property(device, kAudioDevicePropertyDataSource, scope: kAudioObjectPropertyScopeOutput)
+        else { return true }
+        return source == speakerSource
+    }
+
+    static func describeDefaultOutput() -> String {
+        guard let device = defaultOutputDevice() else { return "unknown output" }
         var name: Unmanaged<CFString>?
-        size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        address.mSelector = kAudioObjectPropertyName
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
         let nameStatus = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &name)
         let label = nameStatus == noErr ? (name?.takeRetainedValue() as String? ?? "output") : "output"
-
-        var transport: UInt32 = 0
-        size = UInt32(MemoryLayout<UInt32>.size)
-        address.mSelector = kAudioDevicePropertyTransportType
-        AudioObjectGetPropertyData(device, &address, 0, nil, &size, &transport)
-        let bluetooth = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
-        return bluetooth ? "\(label) (Bluetooth: expect ~150–250 ms extra delay)" : label
+        return defaultOutputIsBuiltInSpeaker() ? label : "\(label) (silent: Whirr plays only on the built-in speaker)"
     }
 
     // MARK: - Time
