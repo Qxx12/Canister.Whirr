@@ -34,10 +34,10 @@ struct Config: Codable, Equatable {
     var sensitivity: Double = 1.0
     /// Hum on the Force Touch trackpad along with the seeks.
     var haptics: Bool = false
-    /// How strong the trackpad hum is, 0.75-1.5. The floor is where the
-    /// quietest seeks still hum at about 0.12, near the least the trackpad's
-    /// sine can be felt at; lower settings would seem broken, not fainter.
-    var hapticStrength: Double = 0.85
+    /// How strong the trackpad hum is, 0.5-1.0. At the floor only the
+    /// louder seeks reach the least the trackpad's sine can be felt at
+    /// (about 0.12), so low settings feel sparser as well as fainter.
+    var hapticStrength: Double = 0.75
 
     init() {}
 
@@ -65,11 +65,11 @@ struct Config: Codable, Equatable {
         else { return Config() }
         config.volume = min(max(config.volume, 0), 1)
         config.sensitivity = min(max(config.sensitivity, 0.25), 4)
-        config.hapticStrength = min(max(config.hapticStrength, 0.75), 1.5)
+        config.hapticStrength = min(max(config.hapticStrength, 0.5), 1.0)
         return config
     }
 
-    /// "on, strength 85%" or "off", for the CLI.
+    /// "on, strength 75%" or "off", for the CLI.
     var hapticsSummary: String {
         haptics ? "on, strength \(Int((hapticStrength * 100).rounded()))%" : "off"
     }
