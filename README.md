@@ -96,8 +96,10 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   60 Hz is low enough to feel without hearing it; the trackpad's built-in taps feel like
   clicks instead. `whirr haptics 80` or `120` makes it fainter or stronger. Whirr drives
   the trackpad through Apple's private MultitouchSupport framework, since the public
-  haptics API is only for a foreground app's own controls; if a macOS update changes it,
-  haptics stop and sound carries on.
+  haptics API is only for a foreground app's own controls. Its calls were worked out on
+  macOS 27, so haptics stay off on other versions until they're checked (`whirr status`
+  says so) rather than risk a crash; `WHIRR_HAPTICS_UNVERIFIED=1 whirr demo` tries them
+  anyway.
 
 On built-in speakers or wired headphones a click follows disk activity by a few tens of
 milliseconds. Bluetooth headphones such as AirPods add roughly 150–250 ms that no app can

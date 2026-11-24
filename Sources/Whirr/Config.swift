@@ -26,7 +26,7 @@ struct Config: Codable, Equatable {
     var volume: Double = 0.2
     var muted: Bool = false
     var sensitivity: Double = 1.0
-    /// Tap the Force Touch trackpad along with the louder seeks.
+    /// Hum on the Force Touch trackpad along with the seeks.
     var haptics: Bool = false
     /// How strong the trackpad hum is, 0.5-1.5. Below about 0.75 it fades out
     /// of feel (the trackpad's sine needs a minimum amplitude to be felt).

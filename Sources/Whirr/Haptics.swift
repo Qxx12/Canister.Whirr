@@ -8,8 +8,13 @@ import IOKit
 /// AppKit's NSHapticFeedbackManager is meant for feedback inside a
 /// foreground app's own UI. Whirr has no UI, so it drives the trackpad's
 /// actuator directly through the private MultitouchSupport framework (as
-/// tools like HapticKey do). The framework is opened with dlopen: if a future
-/// macOS drops or changes it, haptics turn into a no-op and sound carries on.
+/// tools like HapticKey do), opened with dlopen. Its function signatures were
+/// read from the macOS 27 disassembly; a later macOS could change them without
+/// renaming them, and calling one the old way could crash the agent. So
+/// haptics only run on macOS versions in `verifiedMajorVersions`; elsewhere
+/// they're off and `whirr status` says why (WHIRR_HAPTICS_UNVERIFIED=1
+/// overrides that, for trying a new macOS). A missing framework or symbol
+/// also just turns haptics off.
 ///
 /// Each seek that plays starts a short burst of a 60 Hz sine, defined in the
 /// same format as the driver's built-in actuations (read with
@@ -47,14 +52,29 @@ final class Haptics {
     /// bursts join up without overlapping (the trackpad refuses overlaps).
     private var minimumGap: TimeInterval { burstMS / 1000 }
     /// How often to look for trackpads again when none is open (e.g. a Magic
-    /// Trackpad connecting later).
+    /// Trackpad connecting later). After a trackpad stops responding, the
+    /// wait doubles each time it fails again, up to `maxRetryInterval`.
     private let rescanInterval: TimeInterval = 10
+    private let maxRetryInterval: TimeInterval = 600
 
     private var actuators: [CFTypeRef] = []
     /// Bursts built so far, by amplitude in hundredths.
     private var bursts: [Int: CFTypeRef] = [:]
     /// Failed actuations in a row; a busy trackpad can refuse one now and then.
     private var failures = 0
+    /// Wait before looking for trackpads again; grows while they keep failing.
+    private var retryInterval: TimeInterval = 10
+    /// Set while trackpads are failing, so the trouble is logged once and the
+    /// recovery once, not on every retry (the agent's log must not grow
+    /// without bound).
+    private var troubled = false
+    /// Trackpads last named in the log, so reopening the same ones is quiet.
+    private var loggedNames: [String] = []
+    /// The driver refused the hum definition; it won't accept it later in
+    /// this run either, so stop trying.
+    private var rejected = false
+    /// Whether the reason haptics can't run here has been logged.
+    private var loggedUnavailable = false
     private var lastScan: UInt64 = 0
     private var scanned = false
     private var lastBurst: UInt64 = 0
@@ -63,7 +83,9 @@ final class Haptics {
     /// other timers and fire late in clumps, which would bunch bursts up and
     /// drop most of them under `minimumGap`.
     private var pending: [(at: UInt64, amplitude: Double)] = []
-    private var timer: DispatchSourceTimer?
+    /// Kept for the object's lifetime and re-armed for the next pending
+    /// burst, rather than created per burst.
+    private let timer: DispatchSourceTimer
 
     var enabled = false {
         didSet { if !enabled { stop() } }
@@ -77,10 +99,14 @@ final class Haptics {
     init(queue: DispatchQueue, log: @escaping (String) -> Void) {
         self.queue = queue
         self.log = log
+        timer = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
+        timer.schedule(deadline: .distantFuture)
+        timer.setEventHandler { [weak self] in self?.firePending() }
+        timer.resume()
     }
 
     deinit {
-        timer?.cancel()
+        timer.cancel()
         closeAll()
     }
 
@@ -102,20 +128,18 @@ final class Haptics {
     /// Drops pending bursts (used when muting or turning haptics off).
     func stop() {
         pending.removeAll()
-        timer?.cancel()
-        timer = nil
+        armTimer()
     }
 
+    /// Points the timer at the earliest pending burst, or parks it.
     private func armTimer() {
-        timer?.cancel()
-        guard let next = pending.first else { timer = nil; return }
-        let timer = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
-        timer.setEventHandler { [weak self] in self?.firePending() }
+        guard let next = pending.first else {
+            timer.schedule(deadline: .distantFuture)
+            return
+        }
         let now = mach_absolute_time()
         let wait = next.at > now ? Double(next.at - now) / Double(AudioOutput.hostTicks(1)) : 0
         timer.schedule(deadline: .now() + wait, leeway: .milliseconds(1))
-        timer.resume()
-        self.timer = timer
     }
 
     private func firePending() {
@@ -127,9 +151,23 @@ final class Haptics {
         armTimer()
     }
 
+    /// macOS major versions whose MultitouchSupport signatures match `Library`.
+    static let verifiedMajorVersions: Set<Int> = [27]
+
+    /// Why haptics can't run on this Mac, or nil if they can.
+    static var unavailableReason: String? {
+        let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        if !verifiedMajorVersions.contains(major),
+           ProcessInfo.processInfo.environment["WHIRR_HAPTICS_UNVERIFIED"] != "1" {
+            return "not yet verified on macOS \(major); off"
+        }
+        if Library.loaded == nil { return "not supported on this macOS" }
+        return nil
+    }
+
     /// A description of the trackpads haptics would use, for `whirr status`.
     static func describeTrackpads() -> String {
-        guard Library.shared != nil else { return "not supported on this macOS" }
+        if let reason = unavailableReason { return reason }
         let devices = Self.actuationDevices()
         if devices.isEmpty { return "no Force Touch trackpad found" }
         return devices.map(\.name).joined(separator: ", ")
@@ -139,8 +177,14 @@ final class Haptics {
 
     private func burst(_ amplitude: Double) {
         let now = mach_absolute_time()
-        guard now - lastBurst >= AudioOutput.hostTicks(minimumGap) else { return }
-        guard let library = Library.shared else { return }
+        guard !rejected, now - lastBurst >= AudioOutput.hostTicks(minimumGap) else { return }
+        guard let library = Library.shared else {
+            if !loggedUnavailable, let reason = Self.unavailableReason {
+                log("haptics: \(reason)")
+                loggedUnavailable = true
+            }
+            return
+        }
         openIfNeeded(library, now: now)
         guard !actuators.isEmpty, let actuation = hum(library, amplitude: amplitude) else { return }
         lastBurst = now
@@ -151,11 +195,26 @@ final class Haptics {
             // defined, unscaled.
             if library.actuate(actuation, actuator, 0, 1, 1) != 0 { failed = true }
         }
-        failures = failed ? failures + 1 : 0
+        guard failed else {
+            failures = 0
+            if troubled {
+                log("haptics: trackpad responding again")
+                troubled = false
+                retryInterval = rescanInterval
+            }
+            return
+        }
+        failures += 1
         if failures >= 3 {
             // The trackpad went away (Magic Trackpad disconnected) or the
-            // handle went stale over sleep: look again next time.
-            log("haptics: trackpad stopped responding; will look again")
+            // handle went stale over sleep: look again later. If reopening
+            // doesn't help, wait longer each time and stay quiet.
+            if troubled {
+                retryInterval = min(retryInterval * 2, maxRetryInterval)
+            } else {
+                log("haptics: trackpad stopped responding; will keep trying quietly")
+                troubled = true
+            }
             failures = 0
             closeAll()
         }
@@ -176,7 +235,8 @@ final class Haptics {
             "ToneMultipliers": unity,
         ]
         guard let actuation = library.makeActuation(definition as CFDictionary, 0)?.takeRetainedValue() else {
-            log("haptics: the trackpad driver rejected the hum")
+            log("haptics: the trackpad driver rejected the hum; haptics are off until Whirr restarts")
+            rejected = true
             return nil
         }
         bursts[key] = actuation
@@ -185,7 +245,7 @@ final class Haptics {
 
     private func openIfNeeded(_ library: Library, now: UInt64) {
         guard actuators.isEmpty else { return }
-        guard !scanned || now - lastScan >= AudioOutput.hostTicks(rescanInterval) else { return }
+        guard !scanned || now - lastScan >= AudioOutput.hostTicks(retryInterval) else { return }
         let wasScanned = scanned
         scanned = true
         lastScan = now
@@ -197,9 +257,10 @@ final class Haptics {
             actuators.append(actuator)
             names.append(device.name)
         }
-        if !names.isEmpty {
+        if !names.isEmpty, names != loggedNames {
             log("haptics: using \(names.joined(separator: ", "))")
-        } else if !wasScanned {
+            loggedNames = names
+        } else if names.isEmpty, !wasScanned {
             log("haptics: no Force Touch trackpad found")
         }
     }
@@ -258,7 +319,10 @@ final class Haptics {
         let makeActuation: MakeActuation
         let actuate: Actuate
 
-        static let shared: Library? = {
+        /// The functions, if this macOS is one haptics may run on.
+        static let shared: Library? = unavailableReason == nil ? loaded : nil
+
+        static let loaded: Library? = {
             let path = "/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport"
             guard let handle = dlopen(path, RTLD_NOW),
                   let create = dlsym(handle, "MTActuatorCreateFromDeviceID"),
