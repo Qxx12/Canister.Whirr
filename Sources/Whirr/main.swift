@@ -87,9 +87,10 @@ func start() {
 func stop() {
     refuseRoot()
     let wasInstalled = FileManager.default.fileExists(atPath: Paths.launchAgent.path)
-    if LaunchAgent.isLoaded { LaunchAgent.bootoutAndWait() }
+    let wasLoaded = LaunchAgent.isLoaded
+    if wasLoaded { LaunchAgent.bootoutAndWait() }
     LaunchAgent.removePlist()
-    print(wasInstalled ? "Whirr stopped and removed from login." : "Whirr isn't running.")
+    print(wasInstalled || wasLoaded ? "Whirr stopped and removed from login." : "Whirr isn't running.")
 }
 
 func restart() {

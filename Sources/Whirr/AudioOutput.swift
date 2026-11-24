@@ -29,6 +29,8 @@ final class AudioOutput {
     private var needsRebuild = true
     private var startedAt: UInt64 = 0
     private var builtAt: UInt64 = 0
+    /// Bumped by `stop()`, so sounds deferred before a mute don't play after it.
+    private var generation = 0
     private var configObserver: NSObjectProtocol?
     private var idleTimer: DispatchSourceTimer?
     private var deviceListener: AudioObjectPropertyListenerBlock?
@@ -74,8 +76,10 @@ final class AudioOutput {
             // waiting on our own queue, then playing at once.
             let settled = mach_absolute_time() - startedAt > Self.hostTicks(0.05)
             guard settled else {
+                let scheduledIn = generation
                 queue.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    self?.play(buffer, gain: gain, delay: 0)
+                    guard let self, self.generation == scheduledIn else { return }
+                    self.play(buffer, gain: gain, delay: 0)
                 }
                 return
             }
@@ -89,6 +93,7 @@ final class AudioOutput {
 
     /// Stops the engine now (used when muting).
     func stop() {
+        generation += 1
         idleTimer?.cancel()
         idleTimer = nil
         if let engine, engine.isRunning {
@@ -190,8 +195,9 @@ final class AudioOutput {
         // keeps the engine prepared, so the next start() is faster (measured
         // on macOS 27.2: ~6-9 ms after pause vs ~7-16 ms after stop).
         if let engine, engine.isRunning {
+            // Not logged: this happens every few seconds in normal use and
+            // would grow the agent's log without bound.
             engine.pause()
-            log("audio: idle for \(Int(idleTimeout)) s, engine paused")
         }
     }
 

@@ -67,7 +67,8 @@ final class Daemon {
         config = new
         audio.volume = Float(config.volume)
         sonifier.sensitivity = config.sensitivity
-        if config.muted {
+        // `whirr monitor` (silent) keeps watching even when sound is muted.
+        if config.muted && !silent {
             stopPolling()
             audio.stop()
         } else {
