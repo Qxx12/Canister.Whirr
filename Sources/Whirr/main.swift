@@ -106,7 +106,8 @@ func restart() {
 
 func report() {
     let config = Config.load()
-    switch LaunchAgent.state {
+    let state = LaunchAgent.state
+    switch state {
     case .loaded(let pid?):
         if let holder = InstanceLock.holder, holder != pid_t(pid) {
             print("""
@@ -118,8 +119,16 @@ func report() {
         }
     case .loaded(nil):
         print("Whirr is installed but not running. See \(Paths.log.path).")
-    case .installedNotLoaded:
-        if LaunchAgent.isDisabled || LaunchAgent.loginItemStatus == .requiresApproval {
+    case .installedNotLoaded, .notInstalled:
+        if let holder = InstanceLock.holder {
+            // Not managed by launchd, but a copy is playing: a manual `whirr run`.
+            print("""
+            Whirr is running in the foreground (pid \(holder)), probably a `whirr run` in a terminal.
+            It isn't running as a login agent; `whirr start` sets that up.
+            """)
+        } else if case .notInstalled = state {
+            print("Whirr is not running. Run `whirr start`.")
+        } else if LaunchAgent.isDisabled || LaunchAgent.loginItemStatus == .requiresApproval {
             print("""
             Whirr is installed but switched off.
             Turn it on in System Settings > General > Login Items & Extensions, then run `whirr start`.
@@ -127,8 +136,6 @@ func report() {
         } else {
             print("Whirr is installed but not loaded. Run `whirr start`.")
         }
-    case .notInstalled:
-        print("Whirr is not running. Run `whirr start`.")
     }
     print("Volume \(Int((config.volume * 100).rounded()))%, sensitivity \(config.sensitivity)\(config.muted ? ", muted" : "")")
     print("Output: \(AudioOutput.describeDefaultOutput())")

@@ -175,8 +175,10 @@ enum InstanceLock {
     /// releases it; otherwise returns false at once if it's held. The holder
     /// writes its PID into the lock file so others can say who's playing.
     static func acquire(wait: Bool) -> Bool {
-        try? FileManager.default.createDirectory(at: Paths.support, withIntermediateDirectories: true)
-        descriptor = open(Paths.lock.path, O_CREAT | O_RDWR, 0o644)
+        if descriptor < 0 {
+            try? FileManager.default.createDirectory(at: Paths.support, withIntermediateDirectories: true)
+            descriptor = open(Paths.lock.path, O_CREAT | O_RDWR, 0o644)
+        }
         guard descriptor >= 0 else { return true }
         guard flock(descriptor, wait ? LOCK_EX : LOCK_EX | LOCK_NB) == 0 else { return false }
         let pid = Data("\(getpid())\n".utf8)
@@ -185,13 +187,29 @@ enum InstanceLock {
         return true
     }
 
-    /// The PID of the Whirr process playing now, if one is alive.
+    /// The PID of the Whirr process playing now, if any. The lock must
+    /// actually be held: the file keeps the last holder's PID after it
+    /// exits, and that number may since belong to an unrelated process.
     static var holder: pid_t? {
-        guard let text = try? String(contentsOf: Paths.lock, encoding: .utf8),
+        guard isHeld,
+              let text = try? String(contentsOf: Paths.lock, encoding: .utf8),
               let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)),
               pid > 0, kill(pid, 0) == 0 || errno == EPERM
         else { return nil }
         return pid
+    }
+
+    /// True if some process holds the lock right now. (Probes with a separate
+    /// descriptor, so it's meant for other processes such as `whirr status`.)
+    private static var isHeld: Bool {
+        let fd = open(Paths.lock.path, O_RDONLY)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        if flock(fd, LOCK_EX | LOCK_NB) == 0 {
+            flock(fd, LOCK_UN)
+            return false
+        }
+        return errno == EWOULDBLOCK
     }
 
     /// Writes a timestamped line to stderr (the agent's log), like Daemon.log.
