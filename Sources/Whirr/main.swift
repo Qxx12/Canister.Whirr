@@ -12,7 +12,7 @@ Usage: whirr <command>
 
   mute | unmute      Silence or resume sounds (polling stops while muted)
   toggle             Switch between muted and unmuted
-  volume [0-100]     Show or set the volume
+  volume [0-100]     Show or set the volume (default \(Int((Config().volume * 100).rounded())))
   sensitivity [x]    Show or set how eagerly activity makes sound (0.25-4, default 1)
   haptics [on|off|n] Show or set a trackpad hum that follows the seeks;
                      n sets its strength (75-150%, default 85) and turns it on

@@ -64,7 +64,7 @@ final class Daemon {
     private func applyConfig() {
         let new = Config.load()
         if new != config || pollTimer == nil {
-            log("config: volume \(Int(new.volume * 100))%, sensitivity \(new.sensitivity)"
+            log("config: volume \(Int((new.volume * 100).rounded()))%, sensitivity \(new.sensitivity)"
                 + "\(new.haptics ? ", haptics \(Int((new.hapticStrength * 100).rounded()))%" : "")\(new.muted ? ", muted" : "")")
         }
         config = new
