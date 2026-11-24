@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+*.xcodeproj
+xcuserdata/
+.DS_Store
+
+# Downloaded reference recordings: large, mixed licenses (CC0 / CC BY / CC BY-SA)
+research_notes/*/recordings/
