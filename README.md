@@ -97,3 +97,7 @@ remove.
   Login Items & Extensions, then run `whirr start`.
 - **Too chatty or too quiet:** adjust `whirr sensitivity` (for example `0.5` or `2`), and
   use `whirr monitor` to see what your disk is doing.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
