@@ -54,8 +54,9 @@ func start() {
 
     if LaunchAgent.isLoaded {
         if changed {
-            // Reload so launchd picks up the new plist.
-            LaunchAgent.bootout()
+            // Reload so launchd picks up the new plist. Wait until the old job
+            // is really gone: bootstrapping too early fails with error 5.
+            LaunchAgent.bootoutAndWait()
         } else {
             LaunchAgent.kickstart(restart: false)
             report()
@@ -63,8 +64,13 @@ func start() {
         }
     }
     LaunchAgent.enable()
-    let (status, output) = LaunchAgent.bootstrap()
-    if status != 0 {
+    var (status, output) = LaunchAgent.bootstrap()
+    // launchd can still be finishing a previous unload; retry briefly.
+    for _ in 0..<4 where status != 0 && LaunchAgent.loginItemStatus != .requiresApproval && !LaunchAgent.isLoaded {
+        Thread.sleep(forTimeInterval: 0.5)
+        (status, output) = LaunchAgent.bootstrap()
+    }
+    if status != 0 && !LaunchAgent.isLoaded {
         if LaunchAgent.loginItemStatus == .requiresApproval {
             fail("""
             macOS is blocking Whirr from running in the background.
@@ -81,7 +87,7 @@ func start() {
 func stop() {
     refuseRoot()
     let wasInstalled = FileManager.default.fileExists(atPath: Paths.launchAgent.path)
-    if LaunchAgent.isLoaded { LaunchAgent.bootout() }
+    if LaunchAgent.isLoaded { LaunchAgent.bootoutAndWait() }
     LaunchAgent.removePlist()
     print(wasInstalled ? "Whirr stopped and removed from login." : "Whirr isn't running.")
 }

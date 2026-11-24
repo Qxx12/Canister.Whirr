@@ -28,6 +28,7 @@ final class AudioOutput {
     private var nextVoice = 0
     private var needsRebuild = true
     private var startedAt: UInt64 = 0
+    private var builtAt: UInt64 = 0
     private var configObserver: NSObjectProtocol?
     private var idleTimer: DispatchSourceTimer?
     private var deviceListener: AudioObjectPropertyListenerBlock?
@@ -64,18 +65,26 @@ final class AudioOutput {
     /// Plays `buffer` on the next voice, `delay` seconds from now.
     func play(_ buffer: AVAudioPCMBuffer, gain: Float, delay: TimeInterval = 0) {
         guard ensureRunning() else { return }
+        armIdleTimer()
+
+        var when: AVAudioTime?
+        if delay > 0.002 {
+            // Right after a (re)start the nodes' clocks may not be valid yet, so
+            // host-time scheduling is unreliable. Keep the timing anyway by
+            // waiting on our own queue, then playing at once.
+            let settled = mach_absolute_time() - startedAt > Self.hostTicks(0.05)
+            guard settled else {
+                queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.play(buffer, gain: gain, delay: 0)
+                }
+                return
+            }
+            when = AVAudioTime(hostTime: mach_absolute_time() + Self.hostTicks(delay))
+        }
         let player = players[nextVoice]
         nextVoice = (nextVoice + 1) % players.count
         player.volume = gain
-
-        var when: AVAudioTime?
-        // Right after a (re)start the node's clock may not be valid yet, so play at once.
-        let settled = mach_absolute_time() - startedAt > Self.hostTicks(0.05)
-        if delay > 0.002, settled {
-            when = AVAudioTime(hostTime: mach_absolute_time() + Self.hostTicks(delay))
-        }
         player.scheduleBuffer(buffer, at: when, options: .interrupts, completionHandler: nil)
-        armIdleTimer()
     }
 
     /// Stops the engine now (used when muting).
@@ -129,13 +138,21 @@ final class AudioOutput {
 
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
-        ) { [weak self] _ in
+        ) { [weak self, weak engine] _ in
             self?.queue.async {
-                self?.log("audio: output configuration changed; will rebuild")
-                self?.needsRebuild = true
+                guard let self, let engine, engine === self.engine else { return }
+                // A device switch rebuilds the engine straight away (see the
+                // HAL listener); the new engine often reports a configuration
+                // change while it settles. Rebuilding again would cut off
+                // sounds for nothing: if the engine did stop, ensureRunning()
+                // restarts it, and rebuilds only if that fails.
+                guard mach_absolute_time() - self.builtAt > Self.hostTicks(0.5) else { return }
+                self.log("audio: output configuration changed; will rebuild")
+                self.needsRebuild = true
             }
         }
         self.engine = engine
+        builtAt = mach_absolute_time()
         needsRebuild = false
         nextVoice = 0
         log("audio: engine ready on \(Self.describeDefaultOutput())")

@@ -94,6 +94,16 @@ enum LaunchAgent {
     @discardableResult
     static func bootout() -> (Int32, String) { launchctl("bootout", service) }
 
+    /// Unloads the agent and waits (up to `timeout`) until launchd no longer
+    /// lists it, so a following bootstrap doesn't race the teardown.
+    static func bootoutAndWait(timeout: TimeInterval = 5) {
+        bootout()
+        let deadline = Date().addingTimeInterval(timeout)
+        while isLoaded && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
     @discardableResult
     static func kickstart(restart: Bool) -> (Int32, String) {
         restart ? launchctl("kickstart", "-k", service) : launchctl("kickstart", service)

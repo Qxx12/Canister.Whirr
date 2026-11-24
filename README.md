@@ -15,16 +15,27 @@ Requires macOS 15 or later and Swift 6 (Xcode or the Command Line Tools).
 swift build -c release
 ```
 
+Copy the binary somewhere on your PATH that you can write to without sudo, such as
+`~/.local/bin` (`/usr/local/bin` often needs sudo on Apple Silicon Macs):
+
 ```bash
-cp "$(swift build -c release --show-bin-path)/whirr" /usr/local/bin/
+mkdir -p ~/.local/bin
 ```
+
+```bash
+cp "$(swift build -c release --show-bin-path)/whirr" ~/.local/bin/
+```
+
+If `~/.local/bin` isn't on your PATH yet, add `export PATH="$HOME/.local/bin:$PATH"` to
+`~/.zshrc` and open a new terminal. Then:
 
 ```bash
 whirr start
 ```
 
 `whirr start` installs a login agent (`~/Library/LaunchAgents/io.github.qxx12.whirr.plist`)
-that points at the binary you ran, so run it from where the binary will stay.
+that points at the binary you ran, so run it from where the binary will stay. Don't run
+Whirr with sudo: it's a per-user agent and refuses to.
 
 ## Commands
 
