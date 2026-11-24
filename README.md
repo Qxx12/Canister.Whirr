@@ -48,7 +48,7 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr mute` / `unmute` / `toggle` | Silence or resume (polling stops while muted, 0% CPU) |
 | `whirr volume [0-100]` | Show or set the volume (default 25) |
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
-| `whirr haptics [on\|off\|75-150]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
+| `whirr haptics [on\|off\|50-100]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
 | `whirr demo` | Play sample sounds and exit |
 | `whirr monitor` | Print live disk activity levels, no sound |
 
@@ -96,7 +96,7 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   reported latency to land with the sound. A busy disk runs the bursts together into a
   continuous hum, a lone seek is one soft thrum, and longer seeks hum a little stronger.
   60 Hz is low enough to feel without hearing it; the trackpad's built-in taps feel like
-  clicks instead. `whirr haptics 80` or `120` makes it fainter or stronger. Whirr drives
+  clicks instead. `whirr haptics 60` or `100` makes it fainter or stronger. Whirr drives
   the trackpad through Apple's private MultitouchSupport framework, since the public
   haptics API is only for a foreground app's own controls. Its calls were worked out on
   macOS 27, so haptics stay off on other versions until they're checked (`whirr status`
