@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15: the oldest macOS and Swift the README promises.
+        # macos-latest: catches breaks from newer Swift and SDKs.
+        os: [macos-15, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Build release
+        run: swift build -c release
+
+      - name: Smoke test
+        run: '"$(swift build -c release --show-bin-path)/whirr" version'
