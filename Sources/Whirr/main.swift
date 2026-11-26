@@ -19,8 +19,8 @@ Usage: whirr <command>
   drive [name]       List the drives, or pick the one Whirr sounds like
                      (default \(Drive.default.id))
   mount [name]       Show or set what surrounds the drive: bare, tower,
-                     vented or laptop; default puts it back where that drive
-                     usually sits
+                     vented or laptop, with any drive; default puts it back
+                     where the drive usually sits
 
   demo [drive]       Play a few sample sounds and exit
   monitor            Print live disk activity levels without playing sound
@@ -242,26 +242,26 @@ func showOrSetDrive(_ name: String?) {
         return
     }
     guard let drive = Drive.named(name) else { fail("no drive called \(name). `whirr drive` lists them.") }
-    var unfit: Mount?
-    let config = updateConfig {
-        $0.drive = drive.id
-        // A saved mounting the new drive doesn't fit (a laptop drive in a tower) goes back to its usual home.
-        if let raw = $0.mount, let m = Mount(rawValue: raw), !drive.formFactor.mounts.contains(m) {
-            $0.mount = nil
-            unfit = m
-        }
-    }
+    // A picked mounting stays picked; with none, the new drive goes to its usual home.
+    let config = updateConfig { $0.drive = drive.id }
     print("Drive: \(config.driveSummary)")
-    if let unfit {
-        print("A \(drive.formFactor.rawValue) drive doesn't fit \(unfit.rawValue), so the mounting is back to its usual home.")
-    }
+    printFitHint(config)
+}
+
+/// Notes a pairing no real computer had (a 3.5-inch drive in a laptop). It still plays.
+func printFitHint(_ config: Config) {
+    let drive = config.selectedDrive, mount = config.selectedMount
+    guard !drive.formFactor.fits(mount) else { return }
+    print("(A \(drive.formFactor.rawValue) drive never fit \(mount.description), but this is how it would sound.)")
 }
 
 func showOrSetMount(_ name: String?) {
-    let drive = Config.load().selectedDrive
-    let options = drive.formFactor.mounts.map(\.rawValue).joined(separator: ", ")
+    let options = Mount.allCases.map(\.rawValue).joined(separator: ", ")
     guard let name else {
-        print("Mount: \(Config.load().selectedMount.description) (a \(drive.formFactor.rawValue) drive can be: \(options))")
+        let config = Config.load()
+        let source = config.mount == nil ? "where \(config.selectedDrive.name) usually sits" : "picked"
+        print("Mount: \(config.selectedMount.description) (\(source); can be: \(options), or default)")
+        printFitHint(config)
         return
     }
     let key = name.lowercased()
@@ -270,12 +270,10 @@ func showOrSetMount(_ name: String?) {
         print("Mount: \(config.selectedMount.description)")
         return
     }
-    guard let mount = Mount(rawValue: key) else { fail("mount takes one of: \(Mount.allCases.map(\.rawValue).joined(separator: ", ")), or default") }
-    guard drive.formFactor.mounts.contains(mount) else {
-        fail("a \(drive.formFactor.rawValue) drive (\(drive.name)) can be: \(options)")
-    }
+    guard let mount = Mount(rawValue: key) else { fail("mount takes one of: \(options), or default") }
     let config = updateConfig { $0.mount = mount.rawValue }
     print("Mount: \(config.selectedMount.description)")
+    printFitHint(config)
 }
 
 // MARK: - Dispatch

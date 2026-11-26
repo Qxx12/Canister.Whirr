@@ -1,19 +1,19 @@
 import Foundation
 
-/// A drive the user can pick: a voice plus the cases it fits in.
+/// A drive the user can pick: a voice, and the size that decides where it usually sits.
 struct Drive {
     enum FormFactor: String {
         case fiveQuarter = "5.25-inch"
         case threeHalf = "3.5-inch"
         case twoHalf = "2.5-inch"
 
-        /// Where a drive of this size can sit. The first is its usual home.
-        var mounts: [Mount] {
-            switch self {
-            case .fiveQuarter, .threeHalf: [.bare, .tower, .vented]
-            case .twoHalf: [.laptop, .bare]
-            }
-        }
+        /// Where a drive of this size usually sits, when no mounting is picked.
+        var usualMount: Mount { self == .twoHalf ? .laptop : .bare }
+
+        /// Whether a real drive of this size went in `mount`. Any pairing
+        /// plays; this only says when one is make-believe. A 2.5-inch drive
+        /// fits a tower on an adapter bracket; nothing bigger fits a laptop.
+        func fits(_ mount: Mount) -> Bool { self == .twoHalf || mount != .laptop }
     }
 
     let id: String
@@ -22,7 +22,7 @@ struct Drive {
     let formFactor: FormFactor
     let preset: DrivePreset
 
-    var defaultMount: Mount { formFactor.mounts[0] }
+    var defaultMount: Mount { formFactor.usualMount }
 
     /// The voice to render for this drive in `mount`.
     func preset(in mount: Mount) -> DrivePreset {
