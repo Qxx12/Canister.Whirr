@@ -49,7 +49,9 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr volume [0-100]` | Show or set the volume (default 25) |
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
 | `whirr haptics [on\|off\|50-100]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
-| `whirr demo` | Play sample sounds and exit |
+| `whirr drive [name]` | List the drives, or pick the one Whirr sounds like (default `quiet2010s`) |
+| `whirr mount [bare\|tower\|vented\|laptop]` | What surrounds the drive (default: where that drive usually sits) |
+| `whirr demo [drive]` | Play sample sounds and exit, with your drive or the one named |
 | `whirr monitor` | Print live disk activity levels, no sound |
 
 Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
@@ -77,12 +79,17 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   attack and a few lightly damped partials for the metallic tail. Longer seeks are
   louder. Gestures are pre-rendered at startup for 8 seek distances with many
   variations; no recordings are bundled.
-- **Drive voices:** the default is a quiet 2010s 7200 rpm drive. Voices for a 1993
-  vintage drive, a 2000 5400 rpm drive, a 2005 desktop drive and a 2.5-inch laptop
-  drive, and optional enclosures (closed or vented tower, laptop body, laptop on a desk
-  with the drive facing down), exist in code. Their resonances and timings come from
-  measurements of CC0 drive recordings and datasheets; see
-  `reports/Realistic HDD sound synthesis.md`.
+- **Drive voices:** `whirr drive` picks one of nine: a 1987 5.25-inch stepper-motor
+  drive, a 1993 vintage IDE drive, 2000 and 2005 desktop drives, a booming 2007 drive,
+  the quiet 2010s drive (the default), a 2007 2.5-inch laptop drive, and 10,000 and
+  15,000 rpm server drives. Each voice's resonances and seek timing come from CC0 drive
+  recordings and datasheets. Every voice also has a body: the knock of the drive's cover
+  and casting, which close-miked recordings miss. Its pitch comes from plate physics and
+  its level from a target balance with the click. `whirr mount` sets what surrounds the
+  drive separately: bare on a desk, a closed or vented steel tower for desktop drives,
+  or a laptop on a desk for the 2.5-inch drive. Changing either rebuilds the sounds in
+  the background in under half a second. See `reports/Realistic HDD sound synthesis.md`
+  and `reports/HDD sound presets by drive type.md`.
 - **Playback:** an AVAudioEngine with a pool of 32 voices plays the gestures with a
   256-frame buffer. The engine pauses after 3 seconds of silence, which lets the Mac
   sleep and costs nothing while quiet; restarting takes under 10 ms. Volume 100% is capped

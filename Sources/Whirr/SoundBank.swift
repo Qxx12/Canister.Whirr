@@ -51,12 +51,35 @@ struct DrivePreset {
     /// Output filters: how much top and bottom survive the trip to the ear.
     /// A drive inside a closed case sounds much duller (low-pass ~4 kHz).
     var lowPassHz: Double = 8_000
-    var highPassHz: Double = 250
+    var highPassHz: Double = 120
+    /// The drive's body: the top cover and base casting flexing under each
+    /// strike's reaction force. Big, damped plates (Q 6–14) in 300–1800 Hz
+    /// that give a click its "tock" in the room. Close-miked recordings
+    /// under-report them, so their frequencies come from plate physics and
+    /// their levels from a target balance: the 250–1200 Hz body carries
+    /// about as much energy as the 1.5–8 kHz click (−3 dB for the bright,
+    /// small or quiet drives, +2 dB for the heavy old ones). Levels are dB
+    /// re the strongest actuator mode and often exceed it: each plate ring
+    /// is short and broad, while the click is many long, narrow rings.
+    var body: [Mode] = []
     /// The low "thump" some older desktop drives make: reaction torque
     /// shaking the case or desk, arriving a few ms after the click.
     var thump: Thump? = nil
     /// The computer case around the drive, if any.
     var enclosure: Enclosure? = nil
+    /// Stepper-motor actuator: a seek is a fixed-rate train of step impulses
+    /// instead of start/stop strikes (measured on a Seagate ST-277N).
+    var stepper: Stepper? = nil
+
+    struct Stepper {
+        /// Impulse spacing while stepping, then the slowing tail, seconds.
+        var rate: Double = 0.0055
+        var decel: [Double] = [0.0065, 0.0070]
+        var tail: [Double] = [0.0105, 0.0135]
+        var jitter: Double = 0.0005
+        /// Extra level of the sub-650 Hz modes on single steps ("tok").
+        var singleStepLowBoostDB: Double = 7
+    }
 
     struct Thump {
         var hz: Double
@@ -68,6 +91,12 @@ struct DrivePreset {
     }
 
     var revolution: Double { 60 / rpm }
+
+    /// A cover/casting body from its first plate mode: the next two modes
+    /// sit at 1.6× and 2.4×, a little narrower and 3 and 6 dB softer.
+    static func body(_ hz: Double, q: Double, db: Double) -> [Mode] {
+        [Mode(hz: hz, q: q, db: db), Mode(hz: hz * 1.6, q: q + 1, db: db - 3), Mode(hz: hz * 2.4, q: q + 2, db: db - 6)]
+    }
 
     /// Seek time for a move of `d` (fraction of the full stroke): settle plus
     /// a square-root law for short seeks, linear for long ones (Ruemmler &
@@ -103,53 +132,9 @@ struct DrivePreset {
             // "Weight": low-mid modes instead of bass.
             Mode(hz: 1_114, q: 16, db: -7),
             Mode(hz: 991, q: 14, db: -10),
-        ]
+        ],
+        body: body(560, q: 7, db: 7)
     )
-
-    /// The same mid-2000s drive mounted inside a closed steel tower: the
-    /// sound rings briefly inside the box and comes out muffled through the
-    /// panels, with a little brighter leakage through vents and gaps, and a
-    /// soft knock where the drive's vibration reaches the chassis.
-    static let desktop2005InTower: DrivePreset = {
-        var p = desktop2005
-        p.lowPassHz = 9_000
-        p.highPassHz = 200
-        p.thump = nil  // the chassis path (Enclosure) carries the case's response
-        p.enclosure = .tower
-        return p
-    }()
-
-    /// A mid-2000s 2.5-inch 5400 rpm laptop drive inside a laptop on a desk,
-    /// mounted facing down (see Enclosure.laptopOnDesk).
-    /// Timing from typical 2.5-inch datasheets (about 12 ms average seek).
-    /// No recording of a 2.5-inch drive was available, so the voice is the
-    /// desktop drive's resonances scaled up 30% for a smaller, lighter
-    /// actuator arm: an estimate, to be tuned by ear.
-    static let laptop2005: DrivePreset = {
-        var p = desktop2005
-        p.rpm = 5400
-        p.trackToTrack = 0.0018
-        p.average = 0.012
-        p.fullStroke = 0.024
-        p.settle = 0.0012
-        p.maxSeekRate = 57
-        p.modes = desktop2005.modes.map { mode in
-            var m = mode
-            m.hz = min(m.hz * 1.3, 8_400)
-            return m
-        }
-        p.lowPassHz = 9_500
-        p.highPassHz = 250
-        p.enclosure = .laptopOnDesk
-        return p
-    }()
-
-    /// The same drive in a tower with a mesh front or vented side panel.
-    static let desktop2005InVentedTower: DrivePreset = {
-        var p = desktop2005InTower
-        p.enclosure = .towerVented
-        return p
-    }()
 
     /// The voice Whirr uses unless told otherwise.
     static let `default` = quiet2010s
@@ -170,7 +155,9 @@ struct DrivePreset {
             Mode(hz: 2_300, q: 22, db: -15),
             Mode(hz: 1_650, q: 20, db: -16),
         ],
-        lowPassHz: 9_500
+        lowPassHz: 9_500,
+        // A thinner cover with a damping label: a softer, shorter body.
+        body: body(580, q: 6, db: 0)
     )
 
     /// A 2000 5400 rpm drive (Fujitsu MPF3102AT recording): lower and woodier,
@@ -189,7 +176,8 @@ struct DrivePreset {
             Mode(hz: 1_960, q: 22, db: -9),
             Mode(hz: 3_420, q: 26, db: -12),
         ],
-        lowPassHz: 7_000
+        lowPassHz: 7_000,
+        body: body(560, q: 7, db: -4)
     )
 
     /// An early-1990s 3600 rpm IDE drive (Conner CFS420A recording): a
@@ -209,6 +197,8 @@ struct DrivePreset {
         ],
         lowPassHz: 7_000,
         highPassHz: 80,
+        // A thick cast cover: lower plate modes.
+        body: body(480, q: 7, db: 3),
         thump: Thump(hz: 264, q: 4.5, db: 2, delay: 0.004...0.008)
     )
 }
@@ -258,11 +248,17 @@ final class SoundBank {
             (0..<variations).map { _ in Self.renderGesture(distance: d, voice: voice, rng: &synthRNG) }
         }
 
-        // One scale factor for the whole bank: the median 1/3-stroke seek
-        // peaks at `referencePeak`; everything else keeps its relative level.
+        // One scale factor for the whole bank, set by what the Mac's speaker
+        // plays: the median 1/3-stroke seek reaches `referenceLoudness` above
+        // 1 kHz, so every drive and mounting plays as loud as the others and
+        // a drive's body or a muffling case changes its character, not its
+        // volume. The peak is capped so a dark voice can't run hot.
+        // Everything else keeps its relative level.
         let referenceBin = Self.distances.firstIndex(of: 0.33)!
+        let loudness = rendered[referenceBin].map(Self.speakerLoudness).sorted()
         let peaks = rendered[referenceBin].map { $0.reduce(0) { max($0, abs($1)) } }.sorted()
-        let scale = Self.referencePeak / max(peaks[peaks.count / 2], 1e-9)
+        let scale = min(Self.referenceLoudness / max(loudness[loudness.count / 2], 1e-9),
+                        Self.maxPeak / max(peaks[peaks.count / 2], 1e-9))
         for b in rendered.indices {
             for v in rendered[b].indices {
                 rendered[b][v] = rendered[b][v].map { $0 * scale }
@@ -276,9 +272,26 @@ final class SoundBank {
         rng = SplitMix64(seed: seed ^ 0xA5A5_A5A5)
     }
 
-    /// Peak of a typical 1/3-stroke seek before playback gain. A real drive
-    /// is a quiet background sound; this keeps Whirr there at 50% volume.
-    static let referencePeak: Float = 0.17
+    /// Speaker loudness of a typical 1/3-stroke seek (see `speakerLoudness`).
+    /// A real drive is a quiet background sound; this is what the quiet
+    /// 2010s drive had when banks were scaled to peak at 0.17, before drive
+    /// voices gained a body, so volume settings sound as they did.
+    static let referenceLoudness: Float = 0.0204
+    /// The most a typical 1/3-stroke seek may peak at (+6 dB re that 0.17).
+    static let maxPeak: Float = 0.34
+
+    /// RMS over a gesture's first 60 ms above 1 kHz: roughly the part of a
+    /// click a MacBook speaker plays well.
+    static func speakerLoudness(_ samples: [Float]) -> Float {
+        var highPass = Biquad.highPass(hz: 1_000, q: 0.707, sampleRate: sampleRate)
+        let n = min(samples.count, Int(0.06 * sampleRate))
+        var sum = 0.0
+        for i in 0..<n {
+            let y = highPass.process(Double(samples[i]))
+            sum += y * y
+        }
+        return Float((sum / Double(max(n, 1))).squareRoot())
+    }
 
     /// A random variation of the gesture nearest to distance `d`, never the
     /// same variation twice in a row.
@@ -320,6 +333,25 @@ final class SoundBank {
         if d <= 0 {
             // Track switch: a single soft settle-type tick.
             strikes.append(Strike(time: 0, gain: 1, pulse: basePulse * jitter(0.3)))
+        } else if let stepper = voice.stepper {
+            // Impulse count grows with seek time, about one per 6 ms.
+            let n = min(12, max(1, Int((voice.seekTime(d) * jitter(0.1) / 0.006).rounded())))
+            var intervals: [Double] = []
+            if n >= 2 {
+                let tail = n >= 8 ? stepper.tail : []
+                let decel = n >= 4 ? stepper.decel : []
+                let core = max(0, n - 1 - tail.count - decel.count)
+                intervals = Array(repeating: stepper.rate, count: core) + decel + tail
+            }
+            var t = 0.0
+            for k in 0..<n {
+                let gain = decibels((k < n - (n >= 8 ? 2 : 0) ? 0 : -3) + gaussian(using: &rng))
+                strikes.append(Strike(time: t, gain: gain, pulse: basePulse * jitter(0.3)))
+                if k < intervals.count {
+                    t += intervals[k] + Double.random(in: -stepper.jitter...stepper.jitter, using: &rng)
+                }
+            }
+            moveTime = t
         } else {
             let seek = voice.seekTime(d) * jitter(0.1)
             let move = max(0.0003, seek - voice.settle)
@@ -418,10 +450,12 @@ final class SoundBank {
         // slightly different point, so each mode gets its own random gain.
         var out = [Double](repeating: 0, count: count)
         let globalTune = jitter(0.01)
+        let singleStep = voice.stepper != nil && strikes.count == 1
         for mode in voice.modes {
             let hz = mode.hz * globalTune * jitter(0.003)
             let q = mode.q * jitter(0.15)
-            let amplitude = decibels(mode.db + 3 * gaussian(using: &rng))
+            let boost = singleStep && mode.hz < 650 ? voice.stepper!.singleStepLowBoostDB : 0
+            let amplitude = decibels(mode.db + boost + 3 * gaussian(using: &rng))
             let omega = 2 * Double.pi * hz / sr
             let r = exp(-Double.pi * hz / (q * sr))
             let a1 = 2 * r * cos(omega), a2 = -r * r
@@ -437,11 +471,53 @@ final class SoundBank {
         }
         for i in 0..<count { out[i] += grit[i] }
 
+        // The body: cover and casting plates, driven through the casting by
+        // a softer, longer version of each strike (the casting passes only
+        // the low part of the jolt) plus the arm's push-pull reaction, which
+        // makes short seeks knock deeper.
+        if !voice.body.isEmpty {
+            var push = [Double](repeating: 0, count: count)
+            for strike in strikes {
+                let start = Int(strike.time * sr)
+                let n = max(2, Int(max(0.0006, strike.pulse * 2.5) * sr))
+                for i in 0..<n where start + i < count {
+                    push[start + i] += strike.gain * (1 - cos(2 * Double.pi * Double(i) / Double(n))) / Double(n)
+                }
+            }
+            if d > 0, moveTime > 0.0005, voice.stepper == nil {
+                let half = max(2, Int(moveTime / 2 * sr))
+                let area = 0.4 * d.squareRoot() * jitter(0.2)
+                for lobe in 0..<2 {
+                    let sign = lobe == 0 ? 1.0 : -1.0
+                    for i in 0..<half where lobe * half + i < count {
+                        push[lobe * half + i] += sign * area * (1 - cos(2 * Double.pi * Double(i) / Double(half))) / Double(half)
+                    }
+                }
+            }
+            for mode in voice.body {
+                let hz = mode.hz * globalTune * jitter(0.02)
+                let q = mode.q * jitter(0.15)
+                let omega = 2 * Double.pi * hz / sr
+                let r = exp(-Double.pi * hz / (q * sr))
+                let a1 = 2 * r * cos(omega), a2 = -r * r
+                let g = decibels(mode.db + 2 * gaussian(using: &rng)) * sin(omega)
+                var y1 = 0.0, y2 = 0.0
+                for i in 0..<count {
+                    let y = a1 * y1 + a2 * y2 + g * push[i]
+                    y2 = y1
+                    y1 = y
+                    out[i] += y
+                }
+            }
+        }
+
         // Optional low thump: a soft 1–2 ms push, a few ms after the start
         // strike, ringing a broad low resonance.
         if let thump = voice.thump, d > 0 {
             var push = [Double](repeating: 0, count: count)
-            let start = Int(Double.random(in: thump.delay, using: &rng) * sr)
+            // A stepper's landing knock follows the last impulse, not the first.
+            let origin = voice.stepper != nil ? lastStrike : 0
+            let start = Int((origin + Double.random(in: thump.delay, using: &rng)) * sr)
             let n = Int(Double.random(in: 0.001...0.002, using: &rng) * sr)
             for i in 0..<n where start + i < count {
                 push[start + i] = (1 - cos(2 * Double.pi * Double(i) / Double(n))) / Double(n)
@@ -465,16 +541,21 @@ final class SoundBank {
             out = enclosure.apply(out, force: force, sampleRate: sr)
         }
 
-        // The room outside: a few early reflections from the desk and nearby surfaces.
+        // The room outside: a few early reflections from the desk and nearby
+        // surfaces. Surfaces soak up the top, so the reflections come back
+        // darker and the room adds weight rather than fizz.
         let dry = out
+        var reflections = [Double](repeating: 0, count: count)
         for _ in 0..<5 {
             let delay = Int(Double.random(in: 0.0007...0.009, using: &rng) * sr)
             let gain = decibels(.random(in: -22 ... -14, using: &rng))
-            for i in delay..<count { out[i] += gain * dry[i - delay] }
+            for i in delay..<count { reflections[i] += gain * dry[i - delay] }
         }
+        var absorb = Biquad.lowPass(hz: 4_000, q: 0.707, sampleRate: sr)
+        for i in 0..<count { out[i] += absorb.process(reflections[i]) }
 
-        // Heard from a little distance: soften the top; real drives have
-        // almost no bass.
+        // Heard from a little distance: soften the top; keep the drive's
+        // low-mid body, cut only sub-bass the drive can't make.
         var lowPass = Biquad.lowPass(hz: voice.lowPassHz, q: 0.707, sampleRate: sr)
         var highPass = Biquad.highPass(hz: voice.highPassHz, q: 0.707, sampleRate: sr)
         let fade = Int(0.01 * sr)
