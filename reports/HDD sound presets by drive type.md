@@ -27,7 +27,7 @@ Mounting is a separate axis because the same drive changes character with what i
 
 | Mounting | Code today | Real-world fit | Default for | Evidence |
 |---|---|---|---|---|
-| Bare on a desk | `enclosure: nil` plus the drive's own `Thump` | All | All 3.5-inch, server and failing presets | Measured: the reference recordings are close-up bare drives |
+| Bare on a desk | `enclosure: nil` plus the drive's own `Thump` | All | All 3.5-inch, 5.25-inch, server and failing presets | Measured: the reference recordings are close-up bare drives |
 | Closed tower | `.tower` (`thump` set to nil, except a stepper's landing knock) | 3.5-inch, 5.25-inch, server, helium; 2.5-inch on an adapter | none | Estimated (physics) |
 | Vented tower | `.towerVented` | Same | none | Estimated |
 | Laptop / laptop on desk | `.laptop` / `.laptopOnDesk` (`thump` set to nil, except a stepper's landing knock) | 2.5-inch only | laptop2007 | Estimated; matches SPCR's finding that 2.5-inch seek noise is structure-borne |
