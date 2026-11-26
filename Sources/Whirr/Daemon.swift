@@ -19,6 +19,8 @@ final class Daemon {
     private var audio: AudioOutput!
     private var haptics: Haptics!
     private var config = Config()
+    /// The drive and mounting whose sound bank is loaded or being built.
+    private var voiceKey: String?
     private var pollTimer: DispatchSourceTimer?
     private var lastTick: UInt64 = 0
     private var notifyToken: Int32 = 0
@@ -45,7 +47,8 @@ final class Daemon {
 
     private func setUp() {
         log("whirr \(Whirr.version) starting (pid \(getpid()))")
-        bank = SoundBank()
+        config = Config.load()
+        loadVoice(waiting: true)
         audio = AudioOutput(queue: queue, format: bank.format) { [weak self] in self?.log($0) }
         haptics = Haptics(queue: queue) { [weak self] in self?.log($0) }
         monitor = DiskMonitor(queue: queue)
@@ -64,7 +67,7 @@ final class Daemon {
     private func applyConfig() {
         let new = Config.load()
         if new != config || pollTimer == nil {
-            log("config: volume \(Int((new.volume * 100).rounded()))%, sensitivity \(new.sensitivity)"
+            log("config: \(new.driveSummary), volume \(Int((new.volume * 100).rounded()))%, sensitivity \(new.sensitivity)"
                 + "\(new.haptics ? ", haptics \(Int((new.hapticStrength * 100).rounded()))%" : "")\(new.muted ? ", muted" : "")")
         }
         config = new
@@ -72,6 +75,7 @@ final class Daemon {
         haptics.enabled = config.haptics && !silent
         haptics.strength = config.hapticStrength
         sonifier.sensitivity = config.sensitivity
+        loadVoice(waiting: false)
         // `whirr monitor` (silent) keeps watching even when sound is muted.
         if config.muted && !silent {
             stopPolling()
@@ -79,6 +83,32 @@ final class Daemon {
             haptics.stop()
         } else {
             startPolling()
+        }
+    }
+
+    /// Builds the sound bank for the configured drive and mounting. At start
+    /// it waits; after a change it builds in the background (a few hundred
+    /// ms) and keeps playing the old voice until the new one is ready.
+    private func loadVoice(waiting: Bool) {
+        let drive = config.selectedDrive, mount = config.selectedMount
+        let key = "\(drive.id)/\(mount.rawValue)"
+        guard key != voiceKey else { return }
+        voiceKey = key
+        let preset = drive.preset(in: mount)
+        if waiting {
+            bank = SoundBank(preset: preset)
+            sonifier.preset = preset
+            return
+        }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let started = Date()
+            let newBank = SoundBank(preset: preset)
+            self?.queue.async {
+                guard let self, self.voiceKey == key else { return }
+                self.bank = newBank
+                self.sonifier.preset = preset
+                self.log("voice: \(drive.name), \(mount.description) (built in \(Int(Date().timeIntervalSince(started) * 1000)) ms)")
+            }
         }
     }
 

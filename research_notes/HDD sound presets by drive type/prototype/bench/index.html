@@ -1,0 +1,612 @@
+<meta charset="utf-8">
+<title>Whirr Tuning Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a bench. Drive list on the left, a sticky transport on top of the work area,
+   knob groups below it like a channel strip; export at the bottom. */
+:root {
+  --bg: #eceff1; --surface: #f9fafb; --ink: #15191c; --muted: #59636b; --rule: #cfd5da;
+  --led: #d97a00; --led-soft: #f3dcb8; --track: #dde2e6; --good: #2d6a4f; --chip: #e3e8ec;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Inter", -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111417; --surface: #191d21; --ink: #e5e9ec; --muted: #9aa4ac; --rule: #2c3338;
+  --led: #ffa526; --led-soft: #3b2f1f; --track: #262c31; --good: #74c69d; --chip: #242a2f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111417; --surface: #191d21; --ink: #e5e9ec; --muted: #9aa4ac; --rule: #2c3338;
+  --led: #ffa526; --led-soft: #3b2f1f; --track: #262c31; --good: #74c69d; --chip: #242a2f; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; font-stretch: 112%; line-height: 1.05; }
+h2 { font-size: 1.3rem; font-weight: 750; font-stretch: 105%; }
+h3 { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0; max-width: 70ch; }
+code { font-family: var(--mono); font-size: 0.86em; }
+.muted { color: var(--muted); }
+:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+
+header { display: grid; gap: 10px; padding-bottom: 20px; }
+.steps { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--muted); }
+.steps b { color: var(--ink); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Drive list */
+.drives { display: grid; gap: 2px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 760px) { .drives { position: static; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+.drive { display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid transparent; background: none;
+  padding: 7px 9px; border-radius: 5px; cursor: pointer; min-width: 0; }
+.drive:hover { background: var(--surface); }
+.drive[aria-current="true"] { background: var(--surface); border-color: var(--rule); }
+.drive .nm { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drive .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--track); flex: none; }
+.drive.changed .dot { background: var(--led); }
+
+/* Transport */
+.work { display: grid; gap: 14px; min-width: 0; }
+.transport { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
+.tbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; }
+.tname { min-width: 0; flex: 1 1 200px; }
+.tname h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tname .id { font: 400 0.75rem var(--mono); color: var(--muted); }
+.ab { display: inline-flex; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; }
+.ab button { border: 0; background: var(--bg); padding: 7px 11px; cursor: pointer; font-weight: 500; font-size: 0.85rem; }
+.ab button + button { border-left: 1px solid var(--rule); }
+.ab button[aria-pressed="true"] { background: var(--led); color: #fff; }
+.ab button:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.6; }
+.playbtn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--rule); background: var(--bg); cursor: pointer; display: grid; place-items: center; }
+.playbtn:hover { border-color: var(--led); }
+.playbtn svg { width: 13px; height: 13px; fill: currentColor; }
+select, input[type="number"], textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; padding: 5px 7px; }
+.status { font: 400 0.72rem var(--mono); color: var(--muted); min-width: 9em; text-align: right; }
+.scrub { position: relative; height: 30px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; overflow: hidden; }
+.scrub .segs { position: absolute; inset: 0; display: flex; font: 500 0.66rem/30px var(--mono); }
+.scrub .segs span { border-right: 1px solid var(--rule); padding-left: 5px; overflow: hidden; white-space: nowrap; color: var(--muted); }
+.scrub .segs span.on { background: var(--led-soft); }
+.scrub .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--led); left: 0; }
+
+/* Knobs */
+.groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.group { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.group[hidden] { display: none !important; }
+.knob { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.knob label { font-size: 0.85rem; }
+.knob .val { font: 400 0.75rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.knob.changed .val { color: var(--led); }
+.knob input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--led); margin: 0; }
+.knob .hint { grid-column: 1 / -1; font-size: 0.74rem; color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; }
+.check input { accent-color: var(--led); }
+
+/* Modes table */
+details.modes { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; }
+details.modes summary { cursor: pointer; font-weight: 600; }
+.table-wrap { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; font-size: 0.84rem; }
+th, td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--rule); }
+th { font: 500 0.68rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+td input[type="number"] { width: 6.5em; font-family: var(--mono); font-size: 0.82rem; padding: 3px 5px; }
+.small { font-size: 0.8rem; border: 1px solid var(--rule); background: var(--bg); border-radius: 4px; padding: 4px 9px; cursor: pointer; }
+.small:hover { border-color: var(--led); }
+
+.notes { display: grid; gap: 6px; }
+textarea { width: 100%; min-height: 70px; resize: vertical; box-sizing: border-box; }
+.export { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; display: grid; gap: 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.primary { background: var(--led); color: #fff; border: 0; border-radius: 5px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
+pre { margin: 0; font: 400 0.76rem/1.45 var(--mono); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; padding: 10px; overflow-x: auto; max-height: 320px; }
+.kbd { font: 500 0.7rem var(--mono); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Whirr tuning bench</h1>
+    <p class="muted">Each drive re-synthesizes in your browser with a port of Whirr's own engine, on the same disk-activity script as the lineup samples. Move a knob and the sound updates within half a second.</p>
+    <div class="steps">
+      <span><b>1</b> Pick a drive</span><span><b>2</b> Flip between Tuned, Original and Real</span><span><b>3</b> Adjust and leave a note</span><span><b>4</b> Copy settings and paste them into the chat</span>
+      <span><span class="kbd">Space</span> play · <span class="kbd">T</span> <span class="kbd">O</span> <span class="kbd">R</span> switch</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="drives" id="drives" aria-label="Drives"></nav>
+
+    <div class="work">
+      <div class="transport">
+        <div class="tbar">
+          <button class="playbtn" id="play" type="button" aria-label="Play"></button>
+          <div class="tname"><h2 id="dname">Loading…</h2><div class="id" id="did"></div></div>
+          <div class="ab" role="group" aria-label="Which version plays">
+            <button type="button" id="ab-tuned" aria-pressed="true">Tuned</button>
+            <button type="button" id="ab-orig" aria-pressed="false">Original</button>
+            <button type="button" id="ab-real" aria-pressed="false">Real</button>
+          </div>
+          <label class="muted" for="loop" style="font-size:.8rem">Loop</label>
+          <select id="loop">
+            <option value="all">Whole track</option>
+            <option value="ladder">Seek ladder</option>
+            <option value="launch">App launch</option>
+            <option value="copy">File copy</option>
+            <option value="index">Indexing</option>
+            <option value="tail">Idle tail</option>
+          </select>
+          <span class="status" id="status" aria-live="polite"></span>
+        </div>
+        <div class="scrub" id="scrub" role="slider" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+          <div class="segs" id="segs"></div><div class="head" id="head"></div>
+        </div>
+      </div>
+
+      <div class="groups" id="groups"></div>
+
+      <details class="modes" id="modes">
+        <summary>Resonances (<span id="modecount">0</span>) · edit one mode at a time</summary>
+        <p class="muted" style="margin-top:6px;font-size:.82rem">Frequencies and Q here are before the Pitch and Ring knobs; dB is relative to the strongest mode. Untick a row to mute it.</p>
+        <div class="table-wrap"><table><thead><tr><th>On</th><th>Hz</th><th>Q</th><th>dB</th><th>Ring T60</th><th></th></tr></thead><tbody id="modebody"></tbody></table></div>
+        <div class="row" style="margin-top:8px"><button class="small" type="button" id="addmode">Add a mode</button></div>
+      </details>
+
+      <div class="group notes">
+        <label for="note"><h3>Notes for this drive</h3></label>
+        <textarea id="note" placeholder="For example: the tail rings too long, sounds like a bell; the copy section is too loud on the speaker."></textarea>
+      </div>
+
+      <div class="export">
+        <h2>Send your tuning</h2>
+        <p class="muted">Copies every drive you changed (knobs, the resulting modes and your notes) as one block of text. Paste it into the chat and I'll put it into the presets. Settings also stay in this browser.</p>
+        <div class="row">
+          <button class="primary" type="button" id="copy">Copy settings</button>
+          <button class="small" type="button" id="reset">Reset this drive</button>
+          <span class="muted" id="copystate" aria-live="polite" style="font-size:.82rem"></span>
+        </div>
+        <pre id="exportbox" hidden></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LINEUP = [
+  ["stepper1987", "Stepper (1987)"], ["vintage1993", "Vintage IDE (1993)"], ["desktop2000", "Desktop (2000)"],
+  ["woody2000", "Hollow (2000)"], ["desktop2005", "Desktop (2005)"], ["thunk2007", "Thunk (2007)"],
+  ["quiet2010s", "Quiet (2010s)"], ["laptop2007", "Laptop (2007)"], ["server10k", "Server 10K"],
+  ["server15k", "Server 15K"], ["helium2020", "Helium NAS (2020)"], ["failing", "Failing drive"],
+];
+const REAL = { stepper1987: 1, vintage1993: 1, desktop2000: 1, woody2000: 1, desktop2005: 1, thunk2007: 1, quiet2010s: 1,
+  laptop2007: 1, server10k: 1, server15k: 1, failing: 1 };
+const MOUNTS = [["bare", "Bare on a desk"], ["tower", "Closed tower"], ["towerVented", "Vented tower"], ["laptop", "Inside a laptop"], ["laptopOnDesk", "Laptop on a desk"]];
+// Workload phases, seconds after the seek ladder (see the sample renderer).
+const PHASES = [["idle", 0, 1.6], ["launch", 1.6, 4.2], ["idle", 4.2, 5.0], ["copy", 5.0, 8.2], ["idle", 8.2, 9.2], ["index", 9.2, 12.4], ["tail", 12.4, 17.3]];
+
+const pct = (v) => (v >= 0 ? "+" : "") + v.toFixed(1);
+const KNOBS = [
+  { g: "Voice", key: "pitch", label: "Pitch", min: -7, max: 7, step: 0.1, to: (v) => 12 * Math.log2(v), from: (s) => Math.pow(2, s / 12), fmt: (v) => pct(12 * Math.log2(v)) + " st", hint: "Moves every resonance together." },
+  { g: "Voice", key: "qScale", label: "Ring length", min: -1.3, max: 1.3, step: 0.05, to: Math.log2, from: (s) => Math.pow(2, s), fmt: (v) => "Q ×" + v.toFixed(2), hint: "Longer is more metallic; shorter is woodier." },
+  { g: "Voice", key: "tiltDB", label: "Tone tilt", min: -6, max: 6, step: 0.5, fmt: (v) => pct(v) + " dB/oct", hint: "Tips resonances above 2 kHz up or down." },
+  { g: "Voice", key: "pulseScale", label: "Strike hardness", min: -1.5, max: 1.5, step: 0.05, to: (v) => -Math.log2(v), from: (s) => Math.pow(2, -s), fmt: (v) => "contact ×" + v.toFixed(2), hint: "Harder hits are brighter and clickier." },
+  { g: "Voice", key: "lowPassHz", label: "Top end (low-pass)", min: 2000, max: 18000, step: 100, fmt: (v) => (v / 1000).toFixed(1) + " kHz" },
+  { g: "Voice", key: "highPassHz", label: "Bass cut (high-pass)", min: 30, max: 800, step: 5, fmt: (v) => Math.round(v) + " Hz" },
+  { g: "Seek gesture", key: "stopDB", label: "Arrival strike", min: -8, max: 8, step: 0.5, fmt: (v) => pct(v) + " dB", vc: true },
+  { g: "Seek gesture", key: "strikeBDB", label: "Mid-seek strike", min: -30, max: 0, step: 0.5, fmt: (v) => v.toFixed(1) + " dB", vc: true, hint: "The current reversal halfway through a seek." },
+  { g: "Seek gesture", key: "settleDB", label: "Settle ticks", min: -14, max: 6, step: 0.5, fmt: (v) => pct(v) + " dB", vc: true },
+  { g: "Seek gesture", key: "coastDB", label: "Coast hiss", min: -14, max: 12, step: 0.5, fmt: (v) => pct(v) + " dB", vc: true },
+  { g: "Seek gesture", key: "stepRateScale", label: "Step spacing", min: 0.6, max: 1.6, step: 0.02, fmt: (v) => "×" + v.toFixed(2) + " (" + (5.5 * v).toFixed(1) + " ms)", stepper: true, hint: "Time between knocks in a stepper seek." },
+  { g: "Seek gesture", key: "gritDB", label: "Contact grit", min: -14, max: 12, step: 0.5, fmt: (v) => pct(v) + " dB" },
+  { g: "Seek gesture", key: "modeSpreadDB", label: "Hit-to-hit variation", min: 0, max: 6, step: 0.25, fmt: (v) => "±" + v.toFixed(2) + " dB" },
+  { g: "Seek gesture", key: "levelSpanDB", label: "Long vs short seeks", min: 2, max: 16, step: 0.5, fmt: (v) => v.toFixed(1) + " dB apart" },
+  { g: "Body and low end", key: "bodyDB", label: "Body level", min: -24, max: 12, step: 0.5, fmt: (v) => pct(v) + " dB", hint: "The cover and casting knock under each click, 250–1800 Hz." },
+  { g: "Body and low end", key: "bodyPitch", label: "Body pitch", min: -12, max: 12, step: 0.1, to: (v) => 12 * Math.log2(v), from: (s) => Math.pow(2, s / 12), fmt: (v) => pct(12 * Math.log2(v)) + " st", hint: "Bigger, heavier drives sit lower." },
+  { g: "Body and low end", key: "bodyQ", label: "Body ring", min: -1.3, max: 1.3, step: 0.05, to: Math.log2, from: (s) => Math.pow(2, s), fmt: (v) => "Q ×" + v.toFixed(2), hint: "Short is a dull tock; long is a hollow bonk." },
+  { g: "Body and low end", key: "thumpOn", label: "Thump", type: "check" },
+  { g: "Body and low end", key: "thumpHz", label: "Thump pitch", min: 60, max: 800, step: 1, fmt: (v) => Math.round(v) + " Hz", thump: true },
+  { g: "Body and low end", key: "thumpQ", label: "Thump ring", min: 3, max: 40, step: 0.5, fmt: (v) => "Q " + v.toFixed(1), thump: true },
+  { g: "Body and low end", key: "thumpDB", label: "Thump level", min: -24, max: 10, step: 0.5, fmt: (v) => pct(v) + " dB", thump: true },
+  { g: "Body and low end", key: "thumpDelay", label: "Thump delay", min: 0, max: 0.045, step: 0.0005, fmt: (v) => (v * 1000).toFixed(1) + " ms", thump: true },
+  { g: "Space and layers", key: "mount", label: "Mounting", type: "select" },
+  { g: "Space and layers", key: "roomDB", label: "Room reflections", min: -14, max: 8, step: 0.5, fmt: (v) => pct(v) + " dB" },
+  { g: "Space and layers", key: "rumbleDB", label: "Writing rumble", min: -24, max: 12, step: 0.5, fmt: (v) => pct(v) + " dB", rumble: true },
+];
+
+let data = null, worker = null, ctx = null;
+let driveName = null;
+const cache = {};           // name -> { orig: AudioBuffer, scale, real: AudioBuffer|null|undefined }
+let tuned = null;           // AudioBuffer for current knobs
+let state = loadState();    // { knobs: {name: {...}}, notes: {name: ""} }
+let mode = "tuned";         // tuned | orig | real
+let source = null, startedAt = 0, offset = 0, playing = false, renderId = 0, pending = null;
+
+function loadState() {
+  try { const s = JSON.parse(localStorage.getItem("whirr-bench") || "null"); if (s && s.knobs) return s; } catch (e) {}
+  return { knobs: {}, notes: {} };
+}
+function saveState() { try { localStorage.setItem("whirr-bench", JSON.stringify(state)); } catch (e) {} }
+
+const $ = (id) => document.getElementById(id);
+const drive = () => data.drives.find((d) => d.name === driveName);
+const knobs = () => (state.knobs[driveName] = state.knobs[driveName] || {});
+
+function defaultValue(k, d) {
+  const p = d.preset;
+  switch (k.key) {
+    case "lowPassHz": return p.lowPassHz;
+    case "highPassHz": return p.highPassHz;
+    case "thumpOn": return !!p.thump;
+    case "thumpHz": return p.thump ? p.thump.hz : 200;
+    case "thumpQ": return p.thump ? p.thump.q : 12;
+    case "thumpDB": return p.thump ? p.thump.db : -6;
+    case "thumpDelay": return p.thump ? (p.thump.delay[0] + p.thump.delay[1]) / 2 : 0.009;
+    case "mount": return p.enclosure || "bare";
+    default: return WhirrEngine.NEUTRAL[k.key];
+  }
+}
+function value(k) { const v = knobs()[k.key]; return v === undefined ? defaultValue(k, drive()) : v; }
+
+// ---- Engine: a worker built from engine.js ----
+async function startWorker() {
+  try { worker = new Worker("engine.js"); await ping(); return; } catch (e) { worker = null; }
+  const src = await (await fetch("engine.js")).text();
+  worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+}
+function ping() {
+  return new Promise((ok, fail) => {
+    const t = setTimeout(() => fail(new Error("worker timeout")), 4000);
+    worker.onerror = () => { clearTimeout(t); fail(new Error("worker failed")); };
+    worker.onmessage = () => { clearTimeout(t); ok(); };
+    worker.postMessage({ id: -1, drive: { preset: data.drives[0].preset, events: [], total: 0.1, start: 0 }, knobs: {}, enclosures: data.enclosures });
+  });
+}
+function render(d, k, scale) {
+  return new Promise((ok, fail) => {
+    const id = ++renderId;
+    const onMsg = (e) => {
+      if (e.data.id !== id) return;
+      worker.removeEventListener("message", onMsg);
+      e.data.error ? fail(new Error(e.data.error)) : ok(e.data);
+    };
+    worker.addEventListener("message", onMsg);
+    worker.postMessage({ id, drive: d, knobs: k, enclosures: data.enclosures, scale });
+  });
+}
+function toBuffer(samples) {
+  const b = ctx.createBuffer(1, samples.length, 48000);
+  b.copyToChannel(samples, 0);
+  return b;
+}
+
+// ---- Audio ----
+function ensureCtx() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; }
+function currentBuffer() { const c = cache[driveName] || {}; return mode === "tuned" ? tuned : mode === "orig" ? c.orig : c.real; }
+function position() { return playing ? offset + (ctx.currentTime - startedAt) : offset; }
+function loopRange(buf) {
+  const v = $("loop").value, d = drive();
+  if (!buf || v === "all" || mode === "real") return null;
+  if (v === "ladder") return [0, d.start];
+  const ph = PHASES.find((p) => p[0] === v);
+  return [d.start + ph[1], Math.min(buf.duration, d.start + ph[2])];
+}
+function startAt(pos) {
+  const buf = currentBuffer();
+  stopSource();
+  if (!buf) { playing = false; updatePlayIcon(); return; }
+  const range = loopRange(buf);
+  const s = ctx.createBufferSource();
+  s.buffer = buf;
+  if (range) { s.loop = true; s.loopStart = range[0]; s.loopEnd = range[1]; if (pos < range[0] || pos >= range[1]) pos = range[0]; }
+  else { s.loop = true; s.loopStart = 0; s.loopEnd = buf.duration; }
+  pos = Math.max(0, Math.min(pos, buf.duration - 0.01));
+  s.connect(ctx.destination);
+  s.start(0, pos);
+  source = s; startedAt = ctx.currentTime; offset = pos; playing = true;
+  updatePlayIcon();
+}
+function stopSource() { if (source) { try { source.stop(); } catch (e) {} source.disconnect(); source = null; } }
+function normPos() {
+  const buf = currentBuffer(); if (!buf) return 0;
+  const range = loopRange(buf);
+  let p = position();
+  if (range) { const len = range[1] - range[0]; p = p >= range[0] ? range[0] + ((p - range[0]) % len) : p; }
+  else p = p % buf.duration;
+  return p;
+}
+async function togglePlay() {
+  ensureCtx();
+  if (ctx.state === "suspended") await ctx.resume();
+  if (playing) { offset = normPos(); stopSource(); playing = false; updatePlayIcon(); return; }
+  if (mode === "real" && cache[driveName] && cache[driveName].real === undefined) await loadReal();
+  startAt(offset);
+}
+async function setMode(m) {
+  if (m === "real" && !REAL[driveName]) return;
+  const before = mode === "real" ? 0 : normPos();
+  mode = m;
+  ["tuned", "orig", "real"].forEach((x) => $("ab-" + x).setAttribute("aria-pressed", String(x === m)));
+  if (m === "real") { ensureCtx(); await loadReal(); }
+  if (playing) startAt(m === "real" ? 0 : before); else offset = m === "real" ? 0 : before;
+  drawSegs();
+}
+function updatePlayIcon() {
+  $("play").innerHTML = playing
+    ? '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1h3v10H2zM7 1h3v10H7z"/></svg>'
+    : '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5z"/></svg>';
+  $("play").setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+async function loadReal() {
+  const c = cache[driveName] = cache[driveName] || {};
+  if (c.real !== undefined || !REAL[driveName]) return;
+  try {
+    const res = await fetch("audio/ref_" + driveName + ".mp4");
+    c.real = await ensureCtx().decodeAudioData(await res.arrayBuffer());
+  } catch (e) { c.real = null; $("status").textContent = "Real clip failed to load"; }
+}
+
+// ---- Rendering ----
+async function renderOriginal(name) {
+  const d = data.drives.find((x) => x.name === name);
+  const r = await render(d, {}, undefined);
+  ensureCtx();
+  cache[name] = Object.assign(cache[name] || {}, { orig: toBuffer(r.samples), scale: r.scale });
+}
+async function renderTuned() {
+  const name = driveName, k = Object.assign({}, knobs());
+  $("status").textContent = "Rendering…";
+  if (!cache[name] || !cache[name].orig) await renderOriginal(name);
+  const r = await render(drive(), k, cache[name].scale);
+  if (name !== driveName) return;
+  tuned = toBuffer(r.samples);
+  $("status").textContent = "Rendered in " + r.ms + " ms";
+  if (playing && mode === "tuned") startAt(normPos());
+}
+function scheduleRender() {
+  clearTimeout(pending);
+  pending = setTimeout(() => renderTuned().catch((e) => ($("status").textContent = "Render failed: " + e.message)), 140);
+}
+
+// ---- UI ----
+function buildDriveList() {
+  const nav = $("drives");
+  nav.innerHTML = "";
+  LINEUP.forEach(([id, name]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "drive"; b.id = "drive-" + id; b.dataset.id = id;
+    b.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="nm">' + name + "</span>";
+    b.addEventListener("click", () => selectDrive(id));
+    nav.appendChild(b);
+  });
+  markChanged();
+}
+function markChanged() {
+  LINEUP.forEach(([id]) => {
+    const k = state.knobs[id], n = state.notes[id];
+    const changed = (k && Object.keys(k).length > 0) || (n && n.trim());
+    $("drive-" + id).classList.toggle("changed", !!changed);
+    $("drive-" + id).setAttribute("aria-current", String(id === driveName));
+  });
+}
+function drawSegs() {
+  const d = drive(); if (!d) return;
+  const total = d.total, el = $("segs"), loop = $("loop").value;
+  const parts = [["ladder", 0, d.start]].concat(PHASES.map(([n, a, b]) => [n, d.start + a, Math.min(total, d.start + b)]));
+  const names = { ladder: "seek ladder", idle: "idle", launch: "app launch", copy: "file copy", index: "indexing", tail: "idle" };
+  el.innerHTML = mode === "real" ? '<span style="flex:1">real recording · 8 s</span>' : parts.map(([n, a, b]) =>
+    '<span class="' + (n === loop ? "on" : "") + '" style="flex:' + (b - a).toFixed(2) + '">' + (b - a > 1.2 ? names[n] : "") + "</span>").join("");
+}
+function buildKnobs() {
+  const d = drive(), host = $("groups");
+  host.innerHTML = "";
+  const groups = {};
+  KNOBS.forEach((k) => {
+    if (k.vc && d.preset.stepper) return;
+    if (k.stepper && !d.preset.stepper) return;
+    if (k.rumble && !d.rumble) return;
+    if (!groups[k.g]) {
+      const g = document.createElement("div"); g.className = "group";
+      g.innerHTML = "<h3>" + k.g + "</h3>"; host.appendChild(g); groups[k.g] = g;
+    }
+    groups[k.g].appendChild(knobEl(k));
+  });
+  syncThump();
+}
+function knobEl(k) {
+  const wrap = document.createElement("div");
+  const id = "k-" + k.key;
+  if (k.type === "check") {
+    wrap.className = "check";
+    wrap.innerHTML = '<input type="checkbox" id="' + id + '"><label for="' + id + '">' + k.label + "</label>";
+    const input = wrap.querySelector("input");
+    input.checked = value(k);
+    input.addEventListener("change", () => { setKnob(k, input.checked); syncThump(); });
+    return wrap;
+  }
+  if (k.type === "select") {
+    wrap.className = "knob";
+    wrap.innerHTML = '<label for="' + id + '">' + k.label + '</label><span class="val"></span><select id="' + id + '" style="grid-column:1/-1"></select>';
+    const sel = wrap.querySelector("select");
+    MOUNTS.forEach(([v, n]) => { const o = document.createElement("option"); o.value = v; o.textContent = n; sel.appendChild(o); });
+    sel.value = value(k);
+    const upd = () => wrap.classList.toggle("changed", sel.value !== defaultValue(k, drive()));
+    upd();
+    sel.addEventListener("change", () => { setKnob(k, sel.value); upd(); });
+    return wrap;
+  }
+  wrap.className = "knob"; wrap.dataset.key = k.key;
+  if (k.thump) wrap.dataset.thump = "1";
+  wrap.innerHTML = '<label for="' + id + '">' + k.label + '</label><span class="val"></span><input type="range" id="' + id + '" min="' + k.min + '" max="' + k.max + '" step="' + k.step + '">' + (k.hint ? '<span class="hint">' + k.hint + "</span>" : "");
+  const input = wrap.querySelector("input"), val = wrap.querySelector(".val");
+  const to = k.to || ((v) => v), from = k.from || ((s) => s);
+  const show = (v) => { val.textContent = k.fmt(v); wrap.classList.toggle("changed", Math.abs(to(v) - to(defaultValue(k, drive()))) > 1e-9); };
+  input.value = to(value(k)); show(value(k));
+  input.addEventListener("input", () => { const v = from(parseFloat(input.value)); show(v); setKnob(k, v); });
+  input.addEventListener("dblclick", () => { const v = defaultValue(k, drive()); input.value = to(v); show(v); setKnob(k, v); });
+  return wrap;
+}
+function syncThump() {
+  const on = value(KNOBS.find((k) => k.key === "thumpOn"));
+  document.querySelectorAll('[data-thump="1"]').forEach((el) => { el.style.opacity = on ? 1 : 0.45; el.querySelector("input").disabled = !on; });
+}
+function setKnob(k, v) {
+  const kn = knobs(), def = defaultValue(k, drive());
+  const same = typeof v === "number" ? Math.abs(v - def) < 1e-9 : v === def;
+  if (same) delete kn[k.key]; else kn[k.key] = v;
+  saveState(); markChanged(); scheduleRender();
+}
+
+function currentModes() { return knobs().modes || drive().preset.modes.map((m) => [m[0], m[1], m[2], true]); }
+function buildModes() {
+  const body = $("modebody"), modes = currentModes();
+  $("modecount").textContent = modes.length;
+  body.innerHTML = "";
+  modes.forEach((m, i) => {
+    const tr = document.createElement("tr");
+    const t60 = (6.91 * m[1] / (Math.PI * m[0]) * 1000).toFixed(0);
+    tr.innerHTML = '<td><input type="checkbox" id="m-on-' + i + '"' + (m[3] !== false ? " checked" : "") + ' aria-label="Mode ' + (i + 1) + ' on"></td>' +
+      '<td><input type="number" id="m-hz-' + i + '" value="' + m[0] + '" step="1" min="40" max="20000" aria-label="Mode ' + (i + 1) + ' frequency"></td>' +
+      '<td><input type="number" id="m-q-' + i + '" value="' + m[1] + '" step="1" min="2" max="600" aria-label="Mode ' + (i + 1) + ' Q"></td>' +
+      '<td><input type="number" id="m-db-' + i + '" value="' + m[2] + '" step="0.5" min="-60" max="12" aria-label="Mode ' + (i + 1) + ' level"></td>' +
+      '<td class="muted" style="font-family:var(--mono);font-size:.78rem">' + t60 + ' ms</td>' +
+      '<td><button class="small" type="button" aria-label="Remove mode ' + (i + 1) + '">Remove</button></td>';
+    const commit = () => {
+      const ms = currentModes().map((x) => x.slice());
+      ms[i] = [parseFloat(tr.querySelector("#m-hz-" + i).value) || m[0], parseFloat(tr.querySelector("#m-q-" + i).value) || m[1],
+               parseFloat(tr.querySelector("#m-db-" + i).value) || 0, tr.querySelector("#m-on-" + i).checked];
+      setModes(ms);
+    };
+    tr.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", commit));
+    tr.querySelector("button").addEventListener("click", () => { const ms = currentModes().slice(); ms.splice(i, 1); setModes(ms); });
+    body.appendChild(tr);
+  });
+}
+function setModes(ms) {
+  const orig = drive().preset.modes;
+  const same = ms.length === orig.length && ms.every((m, i) => m[0] === orig[i][0] && m[1] === orig[i][1] && m[2] === orig[i][2] && m[3] !== false);
+  if (same) delete knobs().modes; else knobs().modes = ms;
+  saveState(); markChanged(); buildModes(); scheduleRender();
+}
+
+async function selectDrive(id) {
+  const wasPlaying = playing;
+  stopSource(); playing = false; offset = 0; tuned = null;
+  driveName = id;
+  const d = drive();
+  $("dname").textContent = LINEUP.find((x) => x[0] === id)[1];
+  const p = d.preset;
+  $("did").textContent = id + " · " + p.rpm.toLocaleString() + " rpm · " + [p.trackToTrack, p.average, p.fullStroke].map((x) => +(x * 1000).toFixed(1)).join(" / ") + " ms seeks";
+  $("ab-real").disabled = !REAL[id];
+  if (mode === "real" && !REAL[id]) await setMode("tuned");
+  $("note").value = state.notes[id] || "";
+  markChanged(); buildKnobs(); buildModes(); drawSegs(); updatePlayIcon();
+  try { localStorage.setItem("whirr-bench-drive", id); } catch (e) {}
+  await renderTuned();
+  if (wasPlaying) { if (mode === "real") await loadReal(); startAt(0); }
+}
+
+function animate() {
+  const buf = currentBuffer();
+  if (buf) {
+    const p = normPos();
+    $("head").style.left = (100 * p / buf.duration) + "%";
+    $("scrub").setAttribute("aria-valuenow", String(Math.round(100 * p / buf.duration)));
+  }
+  requestAnimationFrame(animate);
+}
+
+// ---- Export ----
+function exportText() {
+  const out = { whirrTuning: 1, drives: {} };
+  LINEUP.forEach(([id]) => {
+    const k = state.knobs[id] || {}, note = (state.notes[id] || "").trim();
+    if (!Object.keys(k).length && !note) return;
+    const d = data.drives.find((x) => x.name === id);
+    const { voice } = WhirrEngine.effectiveVoice(d, k, data.enclosures);
+    const r1 = (x) => Math.round(x * 10) / 10;
+    out.drives[id] = {
+      note: note || undefined,
+      knobs: Object.fromEntries(Object.entries(k).filter(([key]) => key !== "modes")),
+      result: {
+        modes: voice.modes.map(([hz, q, mdb]) => [Math.round(hz), r1(q), r1(mdb)]),
+        body: voice.body.map(([hz, q, mdb]) => [Math.round(hz), r1(q), r1(mdb)]),
+        thump: voice.thump ? { hz: Math.round(voice.thump.hz), q: r1(voice.thump.q), db: r1(voice.thump.db), delay: voice.thump.delay.map((x) => +x.toFixed(4)) } : null,
+        lowPassHz: Math.round(voice.lowPassHz), highPassHz: Math.round(voice.highPassHz),
+        mount: k.mount || d.preset.enclosure || "bare",
+      },
+    };
+  });
+  return JSON.stringify(out, null, 1);
+}
+async function copyExport() {
+  const text = exportText();
+  const box = $("exportbox");
+  box.hidden = false; box.textContent = text;
+  const n = Object.keys(JSON.parse(text).drives).length;
+  if (!n) { $("copystate").textContent = "Nothing changed yet."; return; }
+  try { await navigator.clipboard.writeText(text); $("copystate").textContent = "Copied " + n + (n === 1 ? " drive." : " drives.") + " Paste it into the chat."; }
+  catch (e) {
+    const range = document.createRange(); range.selectNodeContents(box);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    $("copystate").textContent = "Selected below. Press Cmd+C to copy.";
+  }
+}
+
+// ---- Wiring ----
+$("play").addEventListener("click", togglePlay);
+$("ab-tuned").addEventListener("click", () => setMode("tuned"));
+$("ab-orig").addEventListener("click", () => setMode("orig"));
+$("ab-real").addEventListener("click", () => setMode("real"));
+$("loop").addEventListener("change", () => { drawSegs(); if (playing) startAt(normPos()); });
+$("scrub").addEventListener("click", (e) => {
+  const buf = currentBuffer(); if (!buf) return;
+  const r = $("scrub").getBoundingClientRect();
+  const pos = buf.duration * (e.clientX - r.left) / r.width;
+  if (playing) startAt(pos); else offset = pos;
+});
+$("scrub").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  const pos = Math.max(0, normPos() + (e.key === "ArrowRight" ? 1 : -1));
+  if (playing) startAt(pos); else offset = pos;
+});
+$("note").addEventListener("input", () => { state.notes[driveName] = $("note").value; saveState(); markChanged(); });
+$("copy").addEventListener("click", copyExport);
+$("reset").addEventListener("click", () => {
+  delete state.knobs[driveName]; delete state.notes[driveName]; saveState();
+  $("note").value = ""; buildKnobs(); buildModes(); markChanged(); scheduleRender();
+});
+document.addEventListener("keydown", (e) => {
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+  if (e.key === " ") { e.preventDefault(); togglePlay(); }
+  else if (e.key === "t" || e.key === "T") setMode("tuned");
+  else if (e.key === "o" || e.key === "O") setMode("orig");
+  else if (e.key === "r" || e.key === "R") setMode("real");
+});
+
+(async function boot() {
+  updatePlayIcon();
+  try {
+    data = await (await fetch("bench-data.json")).json();
+    data.drives = data.drives.filter((d) => LINEUP.some((x) => x[0] === d.name));
+    await startWorker();
+  } catch (e) {
+    $("dname").textContent = "Couldn't load the engine";
+    $("status").textContent = e.message;
+    return;
+  }
+  buildDriveList();
+  let first = "desktop2005";
+  try { const s = localStorage.getItem("whirr-bench-drive"); if (s && LINEUP.some((x) => x[0] === s)) first = s; } catch (e) {}
+  ensureCtx();
+  await selectDrive(first);
+  animate();
+})();
+</script>
+<script src="engine.js"></script>

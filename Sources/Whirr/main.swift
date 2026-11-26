@@ -16,8 +16,12 @@ Usage: whirr <command>
   sensitivity [x]    Show or set how eagerly activity makes sound (0.25-4, default 1)
   haptics [on|off|n] Show or set a trackpad hum that follows the seeks;
                      n sets its strength (50-100%, default 85) and turns it on
+  drive [name]       List the drives, or pick the one Whirr sounds like
+                     (default \(Drive.default.id))
+  mount [name]       Show or set what surrounds the drive: bare, tower,
+                     vented or laptop (default: where the drive usually sits)
 
-  demo               Play a few sample sounds and exit
+  demo [drive]       Play a few sample sounds and exit
   monitor            Print live disk activity levels without playing sound
   run [--verbose]    Run in the foreground (what the login agent runs)
   version            Print the version
@@ -139,21 +143,27 @@ func report() {
             print("Whirr is installed but not loaded. Run `whirr start`.")
         }
     }
+    print("Drive: \(config.driveSummary)")
     print("Volume \(Int((config.volume * 100).rounded()))%, sensitivity \(config.sensitivity)\(config.muted ? ", muted" : "")")
     print("Output: \(AudioOutput.describeDefaultOutput())")
     print("Haptics: \(config.hapticsSummary) (\(Haptics.describeTrackpads()))")
 }
 
-func demo() {
+func demo(_ name: String?) {
     let queue = DispatchQueue(label: "whirr.demo", qos: .userInteractive)
-    let bank = SoundBank()
-    let config = Config.load()
+    var config = Config.load()
+    if let name {
+        guard let drive = Drive.named(name) else { fail("no drive called \(name). `whirr drive` lists them.") }
+        config.drive = drive.id
+    }
+    let preset = config.selectedDrive.preset(in: config.selectedMount)
+    let bank = SoundBank(preset: preset)
     let audio = AudioOutput(queue: queue, format: bank.format) { _ in }
     audio.volume = Float(config.volume)
     let haptics = Haptics(queue: queue) { _ in }
     haptics.enabled = config.haptics
     haptics.strength = config.hapticStrength
-    print("Playing on \(AudioOutput.describeDefaultOutput())…")
+    print("Playing \(config.selectedDrive.name) (\(config.selectedMount.description)) on \(AudioOutput.describeDefaultOutput())…")
     if config.haptics {
         print("Haptics on: rest a finger on the trackpad (\(Haptics.describeTrackpads())).")
     }
@@ -169,6 +179,7 @@ func demo() {
         time += 0.2
     }
     var sonifier = Sonifier()
+    sonifier.preset = preset
     let busy = DiskCounters(readOps: 150, writeOps: 50, readBytes: 4_000_000, writeBytes: 1_000_000)
     for _ in 0..<60 {
         for event in sonifier.update(delta: busy, dt: Daemon.pollInterval) {
@@ -215,6 +226,55 @@ func showOrSet(_ arguments: ArraySlice<String>, name: String, get: (Config) -> S
     let config = updateConfig { valid = set(&$0, value) }
     guard valid else { fail("\(name) out of range") }
     print("\(name.capitalized): \(get(config))")
+}
+
+func showOrSetDrive(_ name: String?) {
+    guard let name else {
+        let config = Config.load()
+        print("Drive: \(config.driveSummary)\n")
+        let width = Drive.all.map(\.id.count).max()!
+        for drive in Drive.all {
+            let mark = drive.id == config.selectedDrive.id ? "*" : " "
+            print("\(mark) \(drive.id.padding(toLength: width, withPad: " ", startingAt: 0))  \(drive.name): \(drive.summary)")
+        }
+        print("\nPick one with `whirr drive <name>`. Hear one first with `whirr demo <name>`.")
+        return
+    }
+    guard let drive = Drive.named(name) else { fail("no drive called \(name). `whirr drive` lists them.") }
+    var unfit: Mount?
+    let config = updateConfig {
+        $0.drive = drive.id
+        // A saved mounting the new drive doesn't fit (a laptop drive in a tower) goes back to its usual home.
+        if let raw = $0.mount, let m = Mount(rawValue: raw), !drive.formFactor.mounts.contains(m) {
+            $0.mount = nil
+            unfit = m
+        }
+    }
+    print("Drive: \(config.driveSummary)")
+    if let unfit {
+        print("A \(drive.formFactor.rawValue) drive doesn't fit \(unfit.rawValue), so the mounting is back to its usual home.")
+    }
+}
+
+func showOrSetMount(_ name: String?) {
+    let drive = Config.load().selectedDrive
+    let options = drive.formFactor.mounts.map(\.rawValue).joined(separator: ", ")
+    guard let name else {
+        print("Mount: \(Config.load().selectedMount.description) (a \(drive.formFactor.rawValue) drive can be: \(options))")
+        return
+    }
+    let key = name.lowercased()
+    if key == "default" || key == "auto" {
+        let config = updateConfig { $0.mount = nil }
+        print("Mount: \(config.selectedMount.description)")
+        return
+    }
+    guard let mount = Mount(rawValue: key) else { fail("mount takes one of: \(Mount.allCases.map(\.rawValue).joined(separator: ", ")), or default") }
+    guard drive.formFactor.mounts.contains(mount) else {
+        fail("a \(drive.formFactor.rawValue) drive (\(drive.name)) can be: \(options)")
+    }
+    let config = updateConfig { $0.mount = mount.rawValue }
+    print("Mount: \(config.selectedMount.description)")
 }
 
 // MARK: - Dispatch
@@ -268,7 +328,9 @@ case "haptics":
         }
         print("Haptics: \(config.hapticsSummary) (\(trackpads))")
     }
-case "demo": demo()
+case "drive": showOrSetDrive(arguments.dropFirst().first)
+case "mount": showOrSetMount(arguments.dropFirst().first)
+case "demo": demo(arguments.dropFirst().first)
 case "monitor":
     print("Watching disk activity (Ctrl-C to stop). The floor is the learned idle level.")
     Daemon(verbose: true, silent: true).run()

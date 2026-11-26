@@ -38,8 +38,27 @@ struct Config: Codable, Equatable {
     /// louder seeks reach the least the trackpad's sine can be felt at
     /// (about 0.12), so low settings feel sparser as well as fainter.
     var hapticStrength: Double = 0.85
+    /// Which drive's voice plays (`Drive.id`).
+    var drive: String = Drive.default.id
+    /// What surrounds the drive (`Mount.rawValue`); nil is the drive's usual home.
+    var mount: String? = nil
 
     init() {}
+
+    /// The drive to play. An unknown id falls back to the default.
+    var selectedDrive: Drive { Drive.named(drive) ?? .default }
+
+    /// The mounting to play in: the saved one if it suits the drive, else the drive's usual home.
+    var selectedMount: Mount {
+        let drive = selectedDrive
+        guard let raw = mount, let m = Mount(rawValue: raw), drive.formFactor.mounts.contains(m) else {
+            return drive.defaultMount
+        }
+        return m
+    }
+
+    /// "Quiet (2010s), bare on a desk", for the CLI and the log.
+    var driveSummary: String { "\(selectedDrive.name), \(selectedMount.description)" }
 
     /// Missing keys keep their defaults, so a config file written by an
     /// older Whirr still loads with its settings.
@@ -57,6 +76,8 @@ struct Config: Codable, Equatable {
         sensitivity = try container.decodeIfPresent(Double.self, forKey: .sensitivity) ?? defaults.sensitivity
         haptics = try container.decodeIfPresent(Bool.self, forKey: .haptics) ?? defaults.haptics
         hapticStrength = try container.decodeIfPresent(Double.self, forKey: .hapticStrength) ?? defaults.hapticStrength
+        drive = try container.decodeIfPresent(String.self, forKey: .drive) ?? defaults.drive
+        mount = try container.decodeIfPresent(String.self, forKey: .mount)
     }
 
     static func load() -> Config {
@@ -66,6 +87,7 @@ struct Config: Codable, Equatable {
         config.volume = min(max(config.volume, 0), 1)
         config.sensitivity = min(max(config.sensitivity, 0.25), 4)
         config.hapticStrength = min(max(config.hapticStrength, 0.5), 1.0)
+        config.drive = config.selectedDrive.id
         return config
     }
 
