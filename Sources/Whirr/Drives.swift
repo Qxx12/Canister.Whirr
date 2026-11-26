@@ -95,11 +95,21 @@ enum Mount: String, CaseIterable {
             // (The case's vent leak has its own low-pass, so a vented tower can
             // still pass about as much top as the bare drive, not more.)
             p.lowPassHz = min(p.lowPassHz, 9_000)
-            p.thump = nil  // the chassis path (Enclosure) carries the case's response
+            p.dropDeskThump()  // the chassis path (Enclosure) carries the case's response
         case .laptop:
             p.enclosure = .laptopOnDesk
-            p.thump = nil  // the laptop's chassis and desk paths carry the low end
+            p.dropDeskThump()  // the laptop's chassis and desk paths carry the low end
         }
         return p
+    }
+}
+
+private extension DrivePreset {
+    /// Drops the thump that is the desk or case shaking, which an enclosure's
+    /// own paths replace. A stepper's thump is its head's landing knock
+    /// instead: part of the drive's own voice, timed from the last step, and
+    /// nothing in an enclosure makes it, so it stays.
+    mutating func dropDeskThump() {
+        if stepper == nil { thump = nil }
     }
 }
