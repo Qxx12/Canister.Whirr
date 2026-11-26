@@ -87,9 +87,9 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   and casting, which close-miked recordings miss. Its pitch comes from plate physics and
   its level from a target balance with the click. `whirr mount` sets what surrounds the
   drive separately, and any drive goes in any mounting: bare on a desk, a closed or
-  vented steel tower, or a laptop on a desk. Until one is picked, desktop drives sit
-  bare and the 2.5-inch drive sits in a laptop; a picked mounting stays when the drive
-  changes. Changing either rebuilds the sounds in the background in under half a
+  vented steel tower, or a laptop on a desk. Until one is picked, the 2.5-inch drive
+  sits in a laptop and every other drive sits bare; a picked mounting stays when the
+  drive changes. Changing either rebuilds the sounds in the background in under half a
   second. See `reports/Realistic HDD sound synthesis.md` and
   `reports/HDD sound presets by drive type.md`.
 - **Playback:** an AVAudioEngine with a pool of 32 voices plays the gestures with a
