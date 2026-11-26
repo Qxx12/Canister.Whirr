@@ -48,13 +48,10 @@ struct Config: Codable, Equatable {
     /// The drive to play. An unknown id falls back to the default.
     var selectedDrive: Drive { Drive.named(drive) ?? .default }
 
-    /// The mounting to play in: the saved one if it suits the drive, else the drive's usual home.
+    /// The mounting to play in: the saved one, else the drive's usual home.
+    /// Any drive goes in any mounting.
     var selectedMount: Mount {
-        let drive = selectedDrive
-        guard let raw = mount, let m = Mount(rawValue: raw), drive.formFactor.mounts.contains(m) else {
-            return drive.defaultMount
-        }
-        return m
+        mount.flatMap(Mount.init(rawValue:)) ?? selectedDrive.defaultMount
     }
 
     /// "Quiet (2010s), bare on a desk", for the CLI and the log.

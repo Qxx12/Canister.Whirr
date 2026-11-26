@@ -50,7 +50,7 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
 | `whirr haptics [on\|off\|50-100]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
 | `whirr drive [name]` | List the drives, or pick the one Whirr sounds like (default `quiet2010s`) |
-| `whirr mount [bare\|tower\|vented\|laptop\|default]` | What surrounds the drive; `default` (the starting setting) puts it where that drive usually sits |
+| `whirr mount [bare\|tower\|vented\|laptop\|default]` | What surrounds the drive, whichever drive it is; `default` (the starting setting) puts it where that drive usually sits |
 | `whirr demo [drive]` | Play sample sounds and exit, with your drive or the one named |
 | `whirr monitor` | Print live disk activity levels, no sound |
 
@@ -86,10 +86,12 @@ Settings live in `~/Library/Application Support/Whirr/config.json`; logs in
   recordings and datasheets. Every voice also has a body: the knock of the drive's cover
   and casting, which close-miked recordings miss. Its pitch comes from plate physics and
   its level from a target balance with the click. `whirr mount` sets what surrounds the
-  drive separately: bare on a desk, a closed or vented steel tower for desktop drives,
-  or a laptop on a desk for the 2.5-inch drive. Changing either rebuilds the sounds in
-  the background in under half a second. See `reports/Realistic HDD sound synthesis.md`
-  and `reports/HDD sound presets by drive type.md`.
+  drive separately, and any drive goes in any mounting: bare on a desk, a closed or
+  vented steel tower, or a laptop on a desk. Until one is picked, the 2.5-inch drive
+  sits in a laptop and every other drive sits bare; a picked mounting stays when the
+  drive changes. Changing either rebuilds the sounds in the background in under half a
+  second. See `reports/Realistic HDD sound synthesis.md` and
+  `reports/HDD sound presets by drive type.md`.
 - **Playback:** an AVAudioEngine with a pool of 32 voices plays the gestures with a
   256-frame buffer. The engine pauses after 3 seconds of silence, which lets the Mac
   sleep and costs nothing while quiet; restarting takes under 10 ms. Volume 100% is capped
