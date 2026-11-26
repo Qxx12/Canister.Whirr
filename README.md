@@ -50,7 +50,7 @@ Whirr with sudo: it's a per-user agent and refuses to.
 | `whirr sensitivity [0.25-4]` | How eagerly activity makes sound (default 1) |
 | `whirr haptics [on\|off\|50-100]` | A trackpad hum that follows the seeks (default off); a number sets its strength (default 85) |
 | `whirr drive [name]` | List the drives, or pick the one Whirr sounds like (default `quiet2010s`) |
-| `whirr mount [bare\|tower\|vented\|laptop]` | What surrounds the drive (default: where that drive usually sits) |
+| `whirr mount [bare\|tower\|vented\|laptop\|default]` | What surrounds the drive; `default` (the starting setting) puts it where that drive usually sits |
 | `whirr demo [drive]` | Play sample sounds and exit, with your drive or the one named |
 | `whirr monitor` | Print live disk activity levels, no sound |
 

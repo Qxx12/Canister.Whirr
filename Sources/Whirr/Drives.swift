@@ -90,8 +90,9 @@ enum Mount: String, CaseIterable {
             p.enclosure = nil
         case .tower, .vented:
             p.enclosure = self == .tower ? .tower : .towerVented
-            // The panels do the muffling (Enclosure); outside, the usual distance roll-off.
-            p.lowPassHz = 9_000
+            // The panels do the muffling (Enclosure); outside, the usual distance
+            // roll-off, never brighter than the drive is bare.
+            p.lowPassHz = min(p.lowPassHz, 9_000)
             p.thump = nil  // the chassis path (Enclosure) carries the case's response
         case .laptop:
             p.enclosure = .laptopOnDesk
