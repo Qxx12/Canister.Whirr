@@ -56,7 +56,7 @@ In this recording, a stepper seek is a train of discrete impulses at a nearly fi
 - **Power-down:** about 2.4 s of stepping during spin-down (auto-park), louder than any seek.
 
 ### Cited Findings
-All findings in this section are my own analysis of [475216](https://freesound.org/people/jodybruchon/sounds/475216/). Datasheet figures are quoted from [vintage_stepper_and_voice_coil.md](/Users/zihangqi/Workspace/Canister.Whirr/research_notes/HDD%20sound%20presets%20by%20drive%20type/vintage_stepper_and_voice_coil.md), which cites the [ST251N/ST277N Product Manual, Mar 1987](https://ftp.mirrorservice.org/sites/www.bitsavers.org/pdf/seagate/scsi/36034-001B_ST251N_ST277N_Product_Manual_Mar87.pdf): 820 cylinders, 3600 rpm, 8 ms track-to-track, 40 ms average and 95 ms full stroke (maximums).
+All findings in this section are my own analysis of [475216](https://freesound.org/people/jodybruchon/sounds/475216/). Datasheet figures are quoted from [vintage_stepper_and_voice_coil.md](vintage_stepper_and_voice_coil.md), which cites the [ST251N/ST277N Product Manual, Mar 1987](https://ftp.mirrorservice.org/sites/www.bitsavers.org/pdf/seagate/scsi/36034-001B_ST251N_ST277N_Product_Manual_Mar87.pdf): 820 cylinders, 3600 rpm, 8 ms track-to-track, 40 ms average and 95 ms full stroke (maximums).
 
 **Recording map (390.4 s)**
 
@@ -386,8 +386,8 @@ thump: Thump(hz: 565, q: 23, db: -4, delay: 0.000...0.045)  // "landing" knock, 
   - `quiet2010s` strongest mode 3752 Hz.
   - `desktop2005` cluster 1.73-3.0 kHz plus 5.47-6.25 kHz, strongest 1730 Hz.
   - `laptop2005` = `desktop2005` × 1.3 (capped at 8.4 kHz), so its strongest modes are 2249 (0 dB), 3419 (−1), 2847 (−3), 2554 (−5) and 3627 Hz (−6), with 1448/1288 Hz "weight" modes at −7/−10 dB.
-  - Source: [SoundBank.swift](/Users/zihangqi/Workspace/Canister.Whirr/Sources/Whirr/SoundBank.swift)
-- Measured 3.5" drives, from [measured_server_and_samsung_recordings.md](/Users/zihangqi/Workspace/Canister.Whirr/research_notes/HDD%20sound%20presets%20by%20drive%20type/measured_server_and_samsung_recordings.md):
+  - Source: [SoundBank.swift](../../Sources/Whirr/SoundBank.swift)
+- Measured 3.5" drives, from [measured_server_and_samsung_recordings.md](measured_server_and_samsung_recordings.md):
   - SV1022D click 3.4-4.9 kHz, strongest 4064 Hz, Q 40-75.
   - T166 kHz modes 4.5-5.4 kHz (weak).
   - Atlas 10K 4.6-6.5 kHz, Allegro 15k 3.6 and 6.1 kHz.
@@ -398,7 +398,7 @@ thump: Thump(hz: 565, q: 23, db: -4, delay: 0.000...0.045)  // "landing" knock, 
   - The USB Toshiba's strongest kHz modes (5.1-5.7 kHz, section 3) are 1.36-1.51× `quiet2010s`.
   - Only the Fujitsu's secondary 2.77/2.88 kHz pair (−6/−11 dB) falls inside `laptop2005`'s scaled cluster.
   - There is no evidence for event-locked 1.29-1.45 kHz "weight" in the 2.5" drives.
-  - A better rule than "× 1.3 of desktop2005" is: centre the bank at about 5-6.5 kHz (1.4-1.7× of a 3.5" desktop centre), keep a weak 2.8 kHz pair, and drop the sub-2 kHz modes. Any low-mid body belongs to the enclosure (chassis/desk path), not to the drive's own modes. This agrees with the existing note that small-drive airborne seeks are weak and mostly high ([small_form_factor.md](/Users/zihangqi/Workspace/Canister.Whirr/research_notes/HDD%20sound%20presets%20by%20drive%20type/small_form_factor.md)).
+  - A better rule than "× 1.3 of desktop2005" is: centre the bank at about 5-6.5 kHz (1.4-1.7× of a 3.5" desktop centre), keep a weak 2.8 kHz pair, and drop the sub-2 kHz modes. Any low-mid body belongs to the enclosure (chassis/desk path), not to the drive's own modes. This agrees with the existing note that small-drive airborne seeks are weak and mostly high ([small_form_factor.md](small_form_factor.md)).
 - **Damping.** Q≈40-85 (T60 17-57 ms) for the 2.5" seek tick sits between `desktop2005`'s Q 24-36 and the servers' 150-300. The ring is short: about −10 dB in 5 ms in 3-16 kHz.
 - **Level.** In these close-up recordings, laptop seeks barely rise over the spindle hiss broadband: +3.5 dB for the Fujitsu, and nothing at all for the Toshiba while writing sequentially. A laptop preset should keep the idle bed (hiss plus spindle tones) relatively loud and the seek tick quiet. Whirr's `laptopOnDesk` enclosure would supply any thump.
 - **Rhythm:** about 5.5 tick gestures/s, IOI p10/50/90 = 22/121/382 ms. With 50 ms merge, about 3.9/s with IOI p10/50/90 = 99/180/494 ms.
@@ -423,7 +423,7 @@ thump: nil           // chassis path (Enclosure.laptopOnDesk) supplies any low e
 - **Only one of the two laptop recordings contains seeks.** Two drives is a thin basis for a class rule. The USB Toshiba (section 3, contact mic) supports the 5-5.7 kHz placement but cannot test airborne levels.
 - **No true idle exists for either laptop**, so "over idle" means over the writing bed. The measured seek level is a lower bound on prominence in a quiet room.
 - **The Fujitsu click modes might partly reflect the close-up mic's response** or the drive's top cover, not the actuator alone.
-- **Datasheet timing for these models was not checked in this pass.** Seek timing fields should come from [small_form_factor.md](/Users/zihangqi/Workspace/Canister.Whirr/research_notes/HDD%20sound%20presets%20by%20drive%20type/small_form_factor.md) (12-15 ms average for 4200/5400 rpm).
+- **Datasheet timing for these models was not checked in this pass.** Seek timing fields should come from [small_form_factor.md](small_form_factor.md) (12-15 ms average for 4200/5400 rpm).
 - **Unexplained sources:** the 90 Hz and 107.8 Hz lines in the Fujitsu (a 4200 rpm drive) and the Toshiba's switching 40-300 Hz band.
 
 ## 3. USB portable (Toshiba MQ01UBD100, 401271, contact mic): seek character and the emergency-park click

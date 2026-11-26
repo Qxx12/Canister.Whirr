@@ -1,5 +1,6 @@
 import sys, wave, numpy as np
-R='/Users/zihangqi/Workspace/Canister.Whirr/research_notes/'
+import os
+R=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..') + '/'  # research_notes/
 K=R+'Realistic HDD sound synthesis/recordings/freesound_Klerrp_OldHDDs_CC0/'
 N=R+'HDD sound presets by drive type/recordings/'
 C=R+'Realistic HDD sound synthesis/recordings/'

@@ -8,7 +8,7 @@ What is new compared with `real_recordings_analysis.md`:
 1. Q is derived from the decay of a Gaussian narrowband envelope, Q = π·f·T60/6.91. The Gaussian filter has no sinc side lobes, so its late slope is the mode's decay, not the filter's. The fit runs from the first −3 dB point after the peak down to max(pre-onset level + 3 dB, peak − 25 dB). The envelope is energy-averaged over isolated onsets: at least 15 ms quiet before the onset and at least 80 ms (45 ms for the SV1022D) before the next one.
 2. A cross-check: the spectral Q of each mode in single events, from a 50 ms window starting 10 ms after onset. This is capped by the window at about f/29 Hz.
 3. "hold" is the time a band stays within 3 dB of its peak, which captures the multi-strike burst.
-4. "dB" is the energy-averaged narrowband envelope peak relative to the strongest mode, which is what `Mode.db` means in `SoundBank.swift`: the initial ring amplitude relative to the strongest mode ([SoundBank.swift DrivePreset/Mode](/Users/zihangqi/Workspace/Canister.Whirr/Sources/Whirr/SoundBank.swift)).
+4. "dB" is the energy-averaged narrowband envelope peak relative to the strongest mode, which is what `Mode.db` means in `SoundBank.swift`: the initial ring amplitude relative to the strongest mode ([SoundBank.swift DrivePreset/Mode](../../Sources/Whirr/SoundBank.swift)).
 
 Recording pages: [182366 Maxtor Atlas 10K V](https://freesound.org/people/Klerrp/sounds/182366/), [182364 Fujitsu MBA3300RC](https://freesound.org/people/Klerrp/sounds/182364/), [167420 Samsung SV1022D](https://freesound.org/people/Klerrp/sounds/167420/), [167421 Samsung HD501LJ T166](https://freesound.org/people/Klerrp/sounds/167421/), [Klerrp "Old HDDs" pack, CC0](https://freesound.org/people/Klerrp/packs/8850/).
 
@@ -123,7 +123,7 @@ Measured from decay, the kHz seek resonances are far higher-Q than the earlier n
 - *"WD bad heads click of death"* (public domain per Commons; 22.05 kHz).
   - Timing: clicking runs of about 5 s separated by about 0.5-1 s pauses. Each 509-511 ms cycle (p10-p90) holds two clicks about 162 ms apart. Each click is a 67-80 ms cluster of sub-bursts.
   - Level: +31.7 dBA over idle in a 30 ms window; the 1-5 kHz band peaks +42 dB over idle. Excess A-weighted shares: 0/2/88/10%.
-  - Modes: a sharp 4.5-5.6 kHz crack (4741 Hz 0 dB, 4542 −0.8, 5234 −4.9, 5644 −4.9, 2257 −6.0, 2373 −6.5, 3316 −11) with T60 13-34 ms → Q≈30-45. Over it rings a long 1.02-1.11 kHz tone at −2.6 to −2.8 dB, which holds 13-18 ms and needs 30-150 ms to reach −10 dB. The earlier note measured that ring at 130-220 ms T60 ([real_recordings_analysis.md](/Users/zihangqi/Workspace/Canister.Whirr/research_notes/Realistic%20HDD%20sound%20synthesis/real_recordings_analysis.md)), which implies Q ≈ 65-110 at 1.11 kHz.
+  - Modes: a sharp 4.5-5.6 kHz crack (4741 Hz 0 dB, 4542 −0.8, 5234 −4.9, 5644 −4.9, 2257 −6.0, 2373 −6.5, 3316 −11) with T60 13-34 ms → Q≈30-45. Over it rings a long 1.02-1.11 kHz tone at −2.6 to −2.8 dB, which holds 13-18 ms and needs 30-150 ms to reach −10 dB. The earlier note measured that ring at 130-220 ms T60 ([real_recordings_analysis.md](../Realistic%20HDD%20sound%20synthesis/real_recordings_analysis.md)), which implies Q ≈ 65-110 at 1.11 kHz.
   - Idle in this clip is mostly sub-300 Hz noise (−16 dBFS unweighted but −43.9 dBFS A-weighted).
   
   — [Commons WD click of death](https://commons.wikimedia.org/wiki/File:WD_bad_heads_click_of_death.ogg), own analysis
@@ -236,7 +236,7 @@ thump: Thump(hz: 280, q: 8, db: -2, delay: 0.000...0.003)  // WD102AA's low knoc
   - T166: fundamental 120.5 Hz, harmonics 241 Hz (−11) and 482 Hz (−21), and faint whine at 2,894 Hz (24.1×, −33) and 14,469 Hz (120.6×, −35). Idle A-weighted shares 16/30/50/5%.
   
   — [167420](https://freesound.org/people/Klerrp/sounds/167420/), [167421](https://freesound.org/people/Klerrp/sounds/167421/), own analysis
-- **Brightness (excess A-weighted share above 5 kHz):** Atlas 23%, Allegro 15k 10%, SV1022D 4%, T166 2%; Deskstar (failing) 58%. The earlier note had the Atlas at 41% >5 kHz with a 20 ms window and different ranges, and the WD1600JD at 28% — own analysis; [real_recordings_analysis.md](/Users/zihangqi/Workspace/Canister.Whirr/research_notes/Realistic%20HDD%20sound%20synthesis/real_recordings_analysis.md)
+- **Brightness (excess A-weighted share above 5 kHz):** Atlas 23%, Allegro 15k 10%, SV1022D 4%, T166 2%; Deskstar (failing) 58%. The earlier note had the Atlas at 41% >5 kHz with a 20 ms window and different ranges, and the WD1600JD at 28% — own analysis; [real_recordings_analysis.md](../Realistic%20HDD%20sound%20synthesis/real_recordings_analysis.md)
 - **Ring length (kHz-mode decay T60):** Atlas 75-160 ms, Allegro 15k 69-223 ms, T166 (weak modes) 137-290 ms, SV1022D 21-49 ms — own analysis (tables in section 1)
 - **Activity rumble in the servers:** the Atlas seek ranges raise 60-150 Hz by +10 dB and 5-10 kHz by +16 dB over idle, with broad humps at 114-153 and 194-205 Hz (+20 to +27 dB). The Allegro raises nothing below 300 Hz (+0 to +1 dB) and 300 Hz-5 kHz by +9 to +12 dB — [182366](https://freesound.org/people/Klerrp/sounds/182366/), [182364](https://freesound.org/people/Klerrp/sounds/182364/), own analysis (`bed.py`)
 
