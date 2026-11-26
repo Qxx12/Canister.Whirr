@@ -19,7 +19,8 @@ Usage: whirr <command>
   drive [name]       List the drives, or pick the one Whirr sounds like
                      (default \(Drive.default.id))
   mount [name]       Show or set what surrounds the drive: bare, tower,
-                     vented or laptop (default: where the drive usually sits)
+                     vented or laptop; default puts it back where that drive
+                     usually sits
 
   demo [drive]       Play a few sample sounds and exit
   monitor            Print live disk activity levels without playing sound
