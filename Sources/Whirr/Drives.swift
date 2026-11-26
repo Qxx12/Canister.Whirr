@@ -98,6 +98,7 @@ enum Mount: String, CaseIterable {
             p.thump = nil  // the chassis path (Enclosure) carries the case's response
         case .laptop:
             p.enclosure = .laptopOnDesk
+            p.thump = nil  // the laptop's chassis and desk paths carry the low end
         }
         return p
     }

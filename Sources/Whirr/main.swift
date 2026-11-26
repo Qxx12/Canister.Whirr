@@ -165,6 +165,7 @@ func demo(_ name: String?) {
     haptics.enabled = config.haptics
     haptics.strength = config.hapticStrength
     print("Playing \(config.selectedDrive.name) (\(config.selectedMount.description)) on \(AudioOutput.describeDefaultOutput())…")
+    printFitHint(config)
     if config.haptics {
         print("Haptics on: rest a finger on the trackpad (\(Haptics.describeTrackpads())).")
     }
@@ -259,7 +260,8 @@ func showOrSetMount(_ name: String?) {
     let options = Mount.allCases.map(\.rawValue).joined(separator: ", ")
     guard let name else {
         let config = Config.load()
-        let source = config.mount == nil ? "where \(config.selectedDrive.name) usually sits" : "picked"
+        let picked = config.mount.flatMap(Mount.init(rawValue:)) != nil
+        let source = picked ? "picked" : "where \(config.selectedDrive.name) usually sits"
         print("Mount: \(config.selectedMount.description) (\(source); can be: \(options), or default)")
         printFitHint(config)
         return
